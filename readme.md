@@ -1,3 +1,5 @@
+调用whsiper转换录音为字幕的 用一台mac mini弄了一个web服务
+
 ```bash
 uv pip install fastapi uvicorn[standard] python-multipart
 
