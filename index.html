@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>File Upload, Selector, and WebSocket Viewer</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                background-color: #f4f4f9;
+                margin: 0;
+                padding: 20px;
+            }
+            #output {
+                white-space: pre-wrap;
+                background: #1e1e1e;
+                color: #dcdcdc;
+                padding: 10px;
+                border-radius: 5px;
+                overflow-y: auto;
+                height: 300px;
+                margin-bottom: 20px;
+            }
+            button {
+                margin: 5px 0;
+                padding: 10px 15px;
+                border: none;
+                background-color: #0078d7;
+                color: white;
+                border-radius: 5px;
+                cursor: pointer;
+            }
+            button:disabled {
+                background-color: #ccc;
+                cursor: not-allowed;
+            }
+            select,
+            input[type="file"] {
+                width: 100%;
+                padding: 10px;
+                margin-bottom: 10px;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>File Upload, Selector, and WebSocket Viewer</h1>
+
+        <!-- 文件上传 -->
+        <h2>Upload a File</h2>
+        <input type="file" id="fileInput" />
+        <button id="uploadBtn">Upload</button>
+
+        <!-- 文件列表 -->
+        <h2>Select a File to Process</h2>
+        <select id="fileSelector">
+            <option value="">Select a file...</option>
+        </select>
+
+        <!-- WebSocket 操作 -->
+        <button id="connectBtn">Connect</button>
+        <button id="disconnectBtn" disabled>Disconnect</button>
+
+        <div id="output"></div>
+
+        <script>
+            const apiBaseUrl = window.location.origin; // 动态获取当前服务器的主机和端口
+            let websocket = null;
+            const outputDiv = document.getElementById("output");
+            const connectBtn = document.getElementById("connectBtn");
+            const disconnectBtn = document.getElementById("disconnectBtn");
+            const fileSelector = document.getElementById("fileSelector");
+            const fileInput = document.getElementById("fileInput");
+            const uploadBtn = document.getElementById("uploadBtn");
+
+            function appendMessage(message) {
+                const line = document.createElement("div");
+                line.textContent = message;
+                outputDiv.appendChild(line);
+                outputDiv.scrollTop = outputDiv.scrollHeight; // 自动滚动到底部
+            }
+
+            async function loadFiles() {
+                try {
+                    const response = await fetch(`${apiBaseUrl}/files/`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        const files = data.files;
+                        fileSelector.innerHTML =
+                            '<option value="">Select a file...</option>';
+                        files.forEach((file) => {
+                            const option = document.createElement("option");
+                            option.value = file;
+                            option.textContent = file;
+                            fileSelector.appendChild(option);
+                        });
+                    } else {
+                        console.error("Failed to load files.");
+                    }
+                } catch (error) {
+                    console.error("Error loading files:", error);
+                }
+            }
+
+            connectBtn.addEventListener("click", () => {
+                const selectedFile = fileSelector.value;
+                if (!selectedFile) {
+                    alert("Please select a file.");
+                    return;
+                }
+
+                if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+                    websocket = new WebSocket(
+                        `${apiBaseUrl.replace("http", "ws")}/ws`,
+                    );
+
+                    websocket.onopen = () => {
+                        appendMessage(
+                            `[Connected to WebSocket with file: ${selectedFile}]`,
+                        );
+                        websocket.send(selectedFile); // 发送选中的文件名
+                        connectBtn.disabled = true;
+                        disconnectBtn.disabled = false;
+                    };
+
+                    websocket.onmessage = (event) => {
+                        appendMessage(event.data);
+                    };
+
+                    websocket.onclose = () => {
+                        appendMessage("[WebSocket disconnected]");
+                        connectBtn.disabled = false;
+                        disconnectBtn.disabled = true;
+                    };
+
+                    websocket.onerror = (error) => {
+                        appendMessage("[WebSocket error]");
+                        console.error("WebSocket error:", error);
+                    };
+                }
+            });
+
+            disconnectBtn.addEventListener("click", () => {
+                if (websocket) {
+                    websocket.close();
+                    websocket = null;
+                }
+            });
+
+            uploadBtn.addEventListener("click", async () => {
+                const file = fileInput.files[0];
+                if (!file) {
+                    alert("Please select a file to upload.");
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append("file", file);
+
+                try {
+                    const response = await fetch(`${apiBaseUrl}/upload/`, {
+                        method: "POST",
+                        body: formData,
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        appendMessage(`File uploaded: ${data.filename}`);
+                        await loadFiles(); // 上传成功后刷新文件列表
+                    } else {
+                        appendMessage("Failed to upload file.");
+                    }
+                } catch (error) {
+                    console.error("Error uploading file:", error);
+                    appendMessage("Error uploading file.");
+                }
+            });
+
+            // 初始化文件列表
+            loadFiles();
+        </script>
+    </body>
+</html>
