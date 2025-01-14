@@ -12,3 +12,10 @@ uv pip install git+https://github.com/openai/whisper.git # install whisper
 uv run whisper /Users/tommygreen/Movies/mihomo\ party/mihomo\ party.mov --model turbo \
       --language Chinese --task transcribe --output_format srt --initial_prompt "以下是普通话的句子。"
 ```
+
+
+# todo
+
+1. 整理笔记
+2. 转换为srt
+3. 对接youtube下载音频
