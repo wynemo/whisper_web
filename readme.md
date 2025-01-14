@@ -14,6 +14,6 @@ uv run main.py
 
 # todo
 
-1. 整理笔记
+1. 用大模型整理笔记
 2. 转换为srt
 3. 对接youtube下载音频
