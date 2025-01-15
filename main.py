@@ -60,7 +60,9 @@ async def websocket_endpoint(websocket: WebSocket):
             return
 
         cmd = ["uv", "run", "whisper", filename, "--model", "turbo", "--language", "Chinese",
-            "--task", "transcribe", "--output_format", "srt", "--initial_prompt", "以下是普通话的句子。"]
+            "--task", "transcribe",
+            "--max_line_count", "1", "--max_words_per_line", "24", "--word_timestamps", "True",
+            "--output_format", "srt", "--initial_prompt", "以下是普通话的句子。"]
         # 复制当前环境变量并添加 PYTHONUNBUFFERED=1
         env = os.environ.copy()
         env["PYTHONUNBUFFERED"] = "1"
