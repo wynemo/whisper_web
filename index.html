@@ -59,8 +59,15 @@
         <!-- WebSocket 操作 -->
         <button id="connectBtn">Connect</button>
         <button id="disconnectBtn" disabled>Disconnect</button>
+        <button id="cleanTextBtn">显示纯文本</button>
 
         <div id="output"></div>
+
+        <!-- 纯文本显示区域 -->
+        <div id="cleanOutput" style="display: none;">
+            <h3>纯文本字幕 <button id="copyCleanBtn">复制</button> <button id="hideCleanBtn">隐藏</button></h3>
+            <div id="cleanText" style="white-space: pre-wrap; background: #fff; color: #333; padding: 10px; border-radius: 5px; border: 1px solid #ccc; max-height: 300px; overflow-y: auto;"></div>
+        </div>
 
         <script>
             const apiBaseUrl = window.location.origin; // 动态获取当前服务器的主机和端口
@@ -173,6 +180,34 @@
                     console.error("Error uploading file:", error);
                     appendMessage("Error uploading file.");
                 }
+            });
+
+            // 显示纯文本按钮
+            const cleanTextBtn = document.getElementById("cleanTextBtn");
+            const cleanOutput = document.getElementById("cleanOutput");
+            const cleanText = document.getElementById("cleanText");
+            const copyCleanBtn = document.getElementById("copyCleanBtn");
+            const hideCleanBtn = document.getElementById("hideCleanBtn");
+
+            cleanTextBtn.addEventListener("click", () => {
+                // 获取output中的所有文本
+                const lines = outputDiv.innerText.split("\n");
+                // 去掉时间戳 [xx:xx.xxx --> xx:xx.xxx] 格式
+                const cleanedLines = lines
+                    .map(line => line.replace(/\[.*?\]/g, "").trim())
+                    .filter(line => line.length > 0);
+                cleanText.textContent = cleanedLines.join("\n");
+                cleanOutput.style.display = "block";
+            });
+
+            copyCleanBtn.addEventListener("click", () => {
+                navigator.clipboard.writeText(cleanText.textContent).then(() => {
+                    alert("已复制到剪贴板");
+                });
+            });
+
+            hideCleanBtn.addEventListener("click", () => {
+                cleanOutput.style.display = "none";
             });
 
             // 初始化文件列表
