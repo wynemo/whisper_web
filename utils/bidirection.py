@@ -37,6 +37,7 @@ async def text_to_speech(
     voice_type: str = "zh_male_jieshuonansheng_mars_bigtts",
     resource_id: str = "seed-tts-1.0",
     encoding: str = "mp3",
+    speech_rate: int = 0,
 ) -> tuple[bytes, float, list]:
     """
     使用双向流 WebSocket 将文本转换为语音
@@ -48,6 +49,7 @@ async def text_to_speech(
         voice_type: 音色类型
         resource_id: 资源 ID
         encoding: 音频编码格式
+        speech_rate: 语速，取值范围 [-50, 100]，100 代表 2.0 倍速，-50 代表 0.5 倍速，默认 0
 
     Returns:
         tuple[bytes, float, list]: 音频字节数据、音频时长（秒）和语音字幕
@@ -82,6 +84,7 @@ async def text_to_speech(
                     "format": encoding,
                     "sample_rate": 24000,
                     "enable_timestamp": True,
+                    "speech_rate": speech_rate,
                 },
                 "additions": json.dumps({
                     "disable_markdown_filter": True,
