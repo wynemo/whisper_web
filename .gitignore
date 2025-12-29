@@ -1,3 +1,4 @@
 .DS_Store
 __pycache__/
 settings.env
+test_output.mp3
