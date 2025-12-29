@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="zh-CN">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>SRT 字幕转语音</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                background-color: #f4f4f9;
+                margin: 0;
+                padding: 20px;
+                max-width: 800px;
+                margin: 0 auto;
+            }
+            h1 {
+                color: #333;
+            }
+            .upload-area {
+                border: 2px dashed #ccc;
+                border-radius: 10px;
+                padding: 40px;
+                text-align: center;
+                margin-bottom: 20px;
+                transition: border-color 0.3s;
+            }
+            .upload-area:hover {
+                border-color: #0078d7;
+            }
+            .upload-area.dragover {
+                border-color: #0078d7;
+                background-color: #e8f4fc;
+            }
+            input[type="file"] {
+                display: none;
+            }
+            .file-label {
+                display: inline-block;
+                padding: 12px 24px;
+                background-color: #0078d7;
+                color: white;
+                border-radius: 5px;
+                cursor: pointer;
+                margin-bottom: 10px;
+            }
+            .file-label:hover {
+                background-color: #005a9e;
+            }
+            .file-name {
+                margin-top: 10px;
+                color: #666;
+            }
+            button {
+                padding: 12px 24px;
+                border: none;
+                background-color: #28a745;
+                color: white;
+                border-radius: 5px;
+                cursor: pointer;
+                font-size: 16px;
+            }
+            button:hover {
+                background-color: #218838;
+            }
+            button:disabled {
+                background-color: #ccc;
+                cursor: not-allowed;
+            }
+            .status {
+                margin-top: 20px;
+                padding: 15px;
+                border-radius: 5px;
+                display: none;
+            }
+            .status.loading {
+                display: block;
+                background-color: #fff3cd;
+                color: #856404;
+            }
+            .status.success {
+                display: block;
+                background-color: #d4edda;
+                color: #155724;
+            }
+            .status.error {
+                display: block;
+                background-color: #f8d7da;
+                color: #721c24;
+            }
+            .back-link {
+                margin-top: 20px;
+                display: block;
+            }
+            .back-link a {
+                color: #0078d7;
+                text-decoration: none;
+            }
+            .back-link a:hover {
+                text-decoration: underline;
+            }
+            audio {
+                width: 100%;
+                margin-top: 15px;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>SRT 字幕转语音</h1>
+        <p>上传 SRT 字幕文件，自动生成对应的语音文件 (MP3)</p>
+
+        <div class="upload-area" id="uploadArea">
+            <label class="file-label" for="srtFile">选择 SRT 文件</label>
+            <input type="file" id="srtFile" accept=".srt" />
+            <p>或将文件拖放到此处</p>
+            <div class="file-name" id="fileName"></div>
+        </div>
+
+        <button id="generateBtn" disabled>生成语音</button>
+
+        <div class="status" id="status"></div>
+
+        <div id="audioContainer" style="display: none;">
+            <h3>生成的音频</h3>
+            <audio id="audioPlayer" controls></audio>
+            <p><a id="downloadLink" href="#" download>下载 MP3 文件</a></p>
+        </div>
+
+        <div class="back-link">
+            <a href="/">返回首页</a>
+        </div>
+
+        <script>
+            const apiBaseUrl = window.location.origin;
+            const srtFileInput = document.getElementById("srtFile");
+            const uploadArea = document.getElementById("uploadArea");
+            const fileNameDiv = document.getElementById("fileName");
+            const generateBtn = document.getElementById("generateBtn");
+            const statusDiv = document.getElementById("status");
+            const audioContainer = document.getElementById("audioContainer");
+            const audioPlayer = document.getElementById("audioPlayer");
+            const downloadLink = document.getElementById("downloadLink");
+
+            let selectedFile = null;
+
+            // 文件选择
+            srtFileInput.addEventListener("change", (e) => {
+                handleFileSelect(e.target.files[0]);
+            });
+
+            // 拖放支持
+            uploadArea.addEventListener("dragover", (e) => {
+                e.preventDefault();
+                uploadArea.classList.add("dragover");
+            });
+
+            uploadArea.addEventListener("dragleave", () => {
+                uploadArea.classList.remove("dragover");
+            });
+
+            uploadArea.addEventListener("drop", (e) => {
+                e.preventDefault();
+                uploadArea.classList.remove("dragover");
+                const file = e.dataTransfer.files[0];
+                if (file && file.name.endsWith(".srt")) {
+                    handleFileSelect(file);
+                } else {
+                    showStatus("请选择 .srt 文件", "error");
+                }
+            });
+
+            function handleFileSelect(file) {
+                if (!file) return;
+                selectedFile = file;
+                fileNameDiv.textContent = `已选择: ${file.name}`;
+                generateBtn.disabled = false;
+                audioContainer.style.display = "none";
+            }
+
+            function showStatus(message, type) {
+                statusDiv.textContent = message;
+                statusDiv.className = "status " + type;
+            }
+
+            // 生成语音
+            generateBtn.addEventListener("click", async () => {
+                if (!selectedFile) {
+                    showStatus("请先选择 SRT 文件", "error");
+                    return;
+                }
+
+                generateBtn.disabled = true;
+                showStatus("正在生成语音，请稍候...", "loading");
+                audioContainer.style.display = "none";
+
+                const formData = new FormData();
+                formData.append("file", selectedFile);
+
+                try {
+                    const response = await fetch(`${apiBaseUrl}/srt-to-speech/`, {
+                        method: "POST",
+                        body: formData,
+                    });
+
+                    if (response.ok) {
+                        const blob = await response.blob();
+                        const audioUrl = URL.createObjectURL(blob);
+
+                        audioPlayer.src = audioUrl;
+                        downloadLink.href = audioUrl;
+                        downloadLink.download = selectedFile.name.replace(".srt", ".mp3");
+
+                        audioContainer.style.display = "block";
+                        showStatus("生成成功!", "success");
+                    } else {
+                        const errorData = await response.json();
+                        showStatus(`生成失败: ${errorData.error || "未知错误"}`, "error");
+                    }
+                } catch (error) {
+                    console.error("Error:", error);
+                    showStatus(`请求失败: ${error.message}`, "error");
+                } finally {
+                    generateBtn.disabled = false;
+                }
+            });
+        </script>
+    </body>
+</html>
