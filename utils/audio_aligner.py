@@ -1,8 +1,13 @@
 import io
+import logging
 import os
+from typing import Callable, Awaitable
+
 from pydub import AudioSegment
 
 from utils.srt_parser import Subtitle
+
+logger = logging.getLogger(__name__)
 
 
 def adjust_audio_duration(
@@ -94,12 +99,130 @@ def align_audio_to_subtitle(
     }
 
 
+def calculate_speech_rate_for_duration(
+    current_duration_ms: int,
+    target_duration_ms: int,
+    current_speech_rate: int = 0,
+) -> int:
+    """
+    根据当前音频时长和目标时长计算新的 speech_rate
+
+    Args:
+        current_duration_ms: 当前音频时长（毫秒）
+        target_duration_ms: 目标时长（毫秒）
+        current_speech_rate: 当前语速设置
+
+    Returns:
+        新的 speech_rate 值，范围 [-50, 100]
+    """
+    if current_duration_ms <= 0 or target_duration_ms <= 0:
+        return current_speech_rate
+
+    # 计算需要的速度比例
+    # 如果当前时长短于目标，需要降低语速（减小 speech_rate）
+    speed_ratio = current_duration_ms / target_duration_ms
+
+    # speech_rate 范围是 [-50, 100]
+    # -50 表示 0.5 倍速，0 表示 1.0 倍速，100 表示 2.0 倍速
+    # 线性映射：speech_rate = (speed - 1.0) * 100 当 speed >= 1.0
+    #          speech_rate = (speed - 1.0) * 100 当 speed < 1.0 (因为 0.5 -> -50)
+
+    # 当前 speech_rate 对应的速度
+    if current_speech_rate >= 0:
+        current_speed = 1.0 + current_speech_rate / 100.0
+    else:
+        current_speed = 1.0 + current_speech_rate / 100.0  # -50 -> 0.5
+
+    # 目标速度 = 当前速度 * speed_ratio
+    target_speed = current_speed * speed_ratio
+
+    # 将目标速度转换回 speech_rate
+    if target_speed >= 1.0:
+        new_speech_rate = int((target_speed - 1.0) * 100)
+    else:
+        new_speech_rate = int((target_speed - 1.0) * 100)
+
+    # 限制在有效范围内
+    new_speech_rate = max(-50, min(100, new_speech_rate))
+
+    return new_speech_rate
+
+
+async def align_audio_to_subtitle_with_retry(
+    subtitle: Subtitle,
+    tts_func: Callable[..., Awaitable[tuple[bytes, float, list]]],
+    tts_kwargs: dict,
+) -> dict:
+    """
+    生成 TTS 音频并与字幕对齐，如果音频比字幕长会尝试调整语速重新生成（最多重试一次）
+
+    Args:
+        subtitle: 字幕信息
+        tts_func: TTS 函数（如 text_to_speech）
+        tts_kwargs: TTS 函数的参数字典
+
+    Returns:
+        包含字幕、音频和时间戳的结果
+    """
+    subtitle_duration_ms = subtitle.end_time_ms - subtitle.start_time_ms
+    current_speech_rate = tts_kwargs.get("speech_rate", 0)
+
+    # 第一次生成
+    audio_data, _, words = await tts_func(**tts_kwargs)
+    audio_segment = AudioSegment.from_file(io.BytesIO(audio_data))
+
+    # 使用 words 中的时间信息来判断实际语音时长
+    # words 记录了实际语音内容的时间范围，比音频文件时长更准确
+    if words:
+        current_duration_ms = int(words[-1]["end_time"] * 1000)
+    else:
+        current_duration_ms = len(audio_segment)
+
+    # 如果语音内容比字幕长，尝试调整语速重新生成
+    if current_duration_ms > subtitle_duration_ms:
+        print("音频时长短于字幕时长，尝试调整语速重新生成")
+        new_speech_rate = calculate_speech_rate_for_duration(
+            current_duration_ms, subtitle_duration_ms, current_speech_rate
+        )
+
+        # 只有当新语速与当前语速不同时才重试
+        if new_speech_rate != current_speech_rate:
+            logger.info(
+                f"音频时长 {current_duration_ms}ms 长于字幕时长 {subtitle_duration_ms}ms，"
+                f"调整语速从 {current_speech_rate} 到 {new_speech_rate} 重新生成"
+            )
+
+            retry_kwargs = tts_kwargs.copy()
+            retry_kwargs["speech_rate"] = new_speech_rate
+
+            audio_data, _, words = await tts_func(**retry_kwargs)
+            audio_segment = AudioSegment.from_file(io.BytesIO(audio_data))
+
+            if words:
+                current_duration_ms = int(words[-1]["end_time"] * 1000)
+            else:
+                current_duration_ms = len(audio_segment)
+
+            print(f"重试后语音时长：{current_duration_ms}ms")
+
+    # 最终调整（如果仍有差异，使用静音填充或变速）
+    adjusted_audio, adjusted_words = adjust_audio_duration(
+        audio_segment, subtitle_duration_ms, words
+    )
+
+    return {
+        "subtitle": subtitle,
+        "audio_segment": adjusted_audio,
+        "words": adjusted_words,
+    }
+
+
 def merge_aligned_audios(aligned_segments: list[tuple[Subtitle, AudioSegment]]) -> AudioSegment:
     """
     合并所有音频段，按字幕时间戳顺序拼接
 
     Args:
-        aligned_segments: 音频段列表，每项为 (字幕, 音频) 元组
+        aligned_segments: 音频段列表，每项为 (字幕，音频) 元组
 
     Returns:
         合并后的完整音频
@@ -183,11 +306,11 @@ if __name__ == "__main__":
 
 6
 00:00:24,900 --> 00:00:28,400
-有那个香港的CN2路线
+有那个香港的 CN2 路线
 
 7
 00:00:28,933 --> 00:00:33,366
-有那个美国的CN2路线
+有那个美国的 CN2 路线
 """
 
     async def main():
@@ -198,24 +321,25 @@ if __name__ == "__main__":
         subtitles = parse_srt(TEST_SRT)
         print(f"解析 {len(subtitles)} 条字幕")
 
-        resource_id = DOUBAO_RESOURCE_ID or get_resource_id(DOUBAO_DEFAULT_VOICE_TYPE)
-
         aligned_segments = []
         for subtitle in subtitles:
-            audio_data, duration, words = await text_to_speech(
-                text=subtitle.text,
-                appid=DOUBAO_APPID,
-                access_token=DOUBAO_ACCESS_TOKEN,
+            tts_kwargs = {
+                "text": subtitle.text,
+                "appid": DOUBAO_APPID,
+                "access_token": DOUBAO_ACCESS_TOKEN,
+                "voice_type": DOUBAO_DEFAULT_VOICE_TYPE,
+                "resource_id": DOUBAO_RESOURCE_ID,
+            }
+            result = await align_audio_to_subtitle_with_retry(
+                subtitle, text_to_speech, tts_kwargs
             )
-            print(f"字幕{subtitle.index} TTS完成, 时长{duration}s")
-
-            result = align_audio_to_subtitle(audio_data, subtitle, words=words)
+            print(f"字幕{subtitle.index} 处理完成")
             aligned_segments.append((subtitle, result["audio_segment"]))
 
         merged = merge_aligned_audios(aligned_segments)
         output_bytes = export_audio_bytes(merged, format="mp3")
         with open("test_output.mp3", "wb") as f:
             f.write(output_bytes)
-        print(f"合并完成，输出: test_output.mp3, 时长: {len(merged)}ms")
+        print(f"合并完成，输出：test_output.mp3, 时长：{len(merged)}ms")
 
     asyncio.run(main())
