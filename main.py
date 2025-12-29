@@ -108,7 +108,6 @@ async def srt_to_speech(file: UploadFile = File(...)):
 
     1. 解析 SRT 字幕
     2. 逐条调用火山 TTS 生成语音
-    3. 使用 whisperx 对齐音频到字幕时间轴
     4. 合并所有音频段
     5. 返回 mp3 文件
     """
@@ -143,9 +142,9 @@ async def srt_to_speech(file: UploadFile = File(...)):
             )
 
             # 对齐到字幕时间轴
-            aligned_audio = align_audio_to_subtitle(audio_data, subtitle)
+            aligned_result = align_audio_to_subtitle(audio_data, subtitle)
 
-            aligned_segments.append((subtitle, aligned_audio))
+            aligned_segments.append((subtitle, aligned_result["audio_segment"]))
 
         except Exception as e:
             logger.error(f"处理字幕 {i+1} 失败: {e}")
