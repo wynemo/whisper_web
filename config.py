@@ -2,6 +2,9 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
+    # CUDA 配置
+    USE_CUDA: bool = False
+
     # 火山引擎配置
     DOUBAO_APPID: str = ""
     DOUBAO_ACCESS_TOKEN: str = ""

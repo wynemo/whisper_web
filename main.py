@@ -8,12 +8,7 @@ import os
 import asyncio
 import logging
 
-from config import (
-    DOUBAO_APPID,
-    DOUBAO_ACCESS_TOKEN,
-    DOUBAO_RESOURCE_ID,
-    DOUBAO_DEFAULT_VOICE_TYPE,
-)
+from config import settings
 from utils.srt_parser import parse_srt
 from utils.bidirection import text_to_speech
 from utils.audio_aligner import (
@@ -86,7 +81,8 @@ async def websocket_endpoint(websocket: WebSocket):
         cmd = ["uv", "run", "whisper", filename, "--model", "turbo", "--language", "Chinese",
             "--task", "transcribe",
             "--max_line_count", "1", "--max_words_per_line", "24", "--word_timestamps", "True",
-            "--output_format", "srt", "--initial_prompt", "以下是普通话的句子。"]
+            "--output_format", "srt", "--initial_prompt", "以下是普通话的句子。",
+            "--device", "cuda" if settings.USE_CUDA else "cpu"]
         # 复制当前环境变量并添加 PYTHONUNBUFFERED=1
         env = os.environ.copy()
         env["PYTHONUNBUFFERED"] = "1"
@@ -141,10 +137,10 @@ async def srt_to_speech(file: UploadFile = File(...)):
         try:
             tts_kwargs = {
                 "text": subtitle.text,
-                "appid": DOUBAO_APPID,
-                "access_token": DOUBAO_ACCESS_TOKEN,
-                "voice_type": DOUBAO_DEFAULT_VOICE_TYPE,
-                "resource_id": DOUBAO_RESOURCE_ID,
+                "appid": settings.DOUBAO_APPID,
+                "access_token": settings.DOUBAO_ACCESS_TOKEN,
+                "voice_type": settings.DOUBAO_DEFAULT_VOICE_TYPE,
+                "resource_id": settings.DOUBAO_RESOURCE_ID,
             }
             result = await align_audio_to_subtitle_with_retry(
                 subtitle, text_to_speech, tts_kwargs
