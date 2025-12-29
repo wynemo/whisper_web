@@ -17,3 +17,4 @@ dependencies = [
 
 [tool.uv.sources]
 openai-whisper = { git = "https://github.com/openai/whisper.git" }
+fastapi-toolbox = { git = "https://github.com/wynemo/fastapi-utils.git" }

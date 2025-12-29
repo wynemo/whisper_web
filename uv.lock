@@ -118,17 +118,13 @@ wheels = [
 
 [[package]]
 name = "fastapi-toolbox"
-version = "0.6.6"
-source = { registry = "https://pypi.org/simple" }
+version = "0.6.7"
+source = { git = "https://github.com/wynemo/fastapi-utils.git#bdfb5c398db603f8c51aefc16a4ff389f575142d" }
 dependencies = [
     { name = "fastapi" },
     { name = "loguru" },
     { name = "starlette" },
     { name = "uvicorn" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/a9/36/a83aee804c2283bf032ee4d45853f97f388f6e7726975e9d03ccab77a4f4/fastapi_toolbox-0.6.6.tar.gz", hash = "sha256:a4edb2a7b1bd5544eb54ba202faeef93adb204cc9c0bfa9f6fba80af11a8d692", size = 19223, upload-time = "2025-12-29T08:53:36.702Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/0a/d6/9537ac127dedaa17c71c266f19beb43905e631673e577bf0dfe944dbe91a/fastapi_toolbox-0.6.6-py3-none-any.whl", hash = "sha256:dd3cff24dc1a731a257cd93f97e9fc89430355c6b74fc62f25bb2f37527abb5b", size = 23550, upload-time = "2025-12-29T08:53:35.186Z" },
 ]
 
 [[package]]
@@ -745,7 +741,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi", specifier = ">=0.128.0" },
-    { name = "fastapi-toolbox" },
+    { name = "fastapi-toolbox", git = "https://github.com/wynemo/fastapi-utils.git" },
     { name = "mutagen" },
     { name = "openai-whisper", git = "https://github.com/openai/whisper.git" },
     { name = "pydub" },
