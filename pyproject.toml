@@ -9,6 +9,7 @@ dependencies = [
     "fastapi-toolbox",
     "mutagen",
     "openai-whisper",
+    "pydantic-settings>=2.11.0",
     "pydub",
     "python-multipart",
     "uvicorn",
