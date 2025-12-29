@@ -16,7 +16,7 @@ from config import (
 from utils.srt_parser import parse_srt
 from utils.bidirection import text_to_speech
 from utils.audio_aligner import (
-    align_audio_to_subtitle,
+    align_audio_to_subtitle_with_retry,
     merge_aligned_audios,
     export_audio_bytes,
 )
@@ -47,6 +47,12 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 async def serve_index():
     """提供 index.html 文件"""
     return FileResponse("index.html")
+
+
+@app.get("/srt-to-speech")
+async def serve_srt_to_speech():
+    """提供 SRT 转语音页面"""
+    return FileResponse("srt_to_speech.html")
 
 @app.post("/upload/")
 async def upload_file(file: UploadFile = File(...)):
@@ -132,19 +138,18 @@ async def srt_to_speech(file: UploadFile = File(...)):
         logger.info(f"处理字幕 {i+1}/{len(subtitles)}: {subtitle.text[:20]}...")
 
         try:
-            # 调用 TTS 生成语音
-            audio_data, _, _ = await text_to_speech(
-                text=subtitle.text,
-                appid=DOUBAO_APPID,
-                access_token=DOUBAO_ACCESS_TOKEN,
-                voice_type=DOUBAO_DEFAULT_VOICE_TYPE,
-                resource_id=DOUBAO_RESOURCE_ID,
+            tts_kwargs = {
+                "text": subtitle.text,
+                "appid": DOUBAO_APPID,
+                "access_token": DOUBAO_ACCESS_TOKEN,
+                "voice_type": DOUBAO_DEFAULT_VOICE_TYPE,
+                "resource_id": DOUBAO_RESOURCE_ID,
+            }
+            result = await align_audio_to_subtitle_with_retry(
+                subtitle, text_to_speech, tts_kwargs
             )
 
-            # 对齐到字幕时间轴
-            aligned_result = align_audio_to_subtitle(audio_data, subtitle)
-
-            aligned_segments.append((subtitle, aligned_result["audio_segment"]))
+            aligned_segments.append((subtitle, result["audio_segment"]))
 
         except Exception as e:
             logger.error(f"处理字幕 {i+1} 失败: {e}")
@@ -159,10 +164,13 @@ async def srt_to_speech(file: UploadFile = File(...)):
 
     # 返回音频文件
     output_filename = os.path.splitext(file.filename)[0] + ".mp3"
+    # URL encode the filename for non-ASCII characters (RFC 5987)
+    from urllib.parse import quote
+    encoded_filename = quote(output_filename)
     return Response(
         content=audio_bytes,
         media_type="audio/mpeg",
-        headers={"Content-Disposition": f"attachment; filename={output_filename}"},
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"},
     )
 
 
