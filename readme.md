@@ -2,12 +2,10 @@
 
 ```bash
 
-brew install uv ffmpeg #install uv and ffmpeg
+brew install uv ffmpeg #install uv and ffmpeg, use the newest uv
 
-uv venv --python 3.9 # install python, but virtual env         （它会用系统的3.9）
-uv pip install git+https://github.com/openai/whisper.git # install whisper
-uv pip install fastapi uvicorn[standard] python-multipart
-uv run main.py
+uv sync
+uv run --env-file settings.env main.py
 
 ```
 
@@ -27,5 +25,5 @@ uv run main.py
 
 1. 上传 srt 字幕
 2. 调用字节跳动的语音合成服务
-3. 调用 whisperx 根据字幕对齐语音
+3. ~~调用 whisperx 根据字幕对齐语音~~
 4. 合并生成的音频
