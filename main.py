@@ -1,11 +1,12 @@
+import argparse
 from fastapi import FastAPI, File, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi_toolbox import run_server
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from subprocess import Popen, PIPE, STDOUT
 import os
 import asyncio
 import logging
-import uvicorn
 
 from config import (
     DOUBAO_APPID,
@@ -174,5 +175,37 @@ async def srt_to_speech(file: UploadFile = File(...)):
     )
 
 
+# uv run uvicorn main:app 开发模式
+# uv run main.py --workers 2 部署模式
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # 创建命令行参数解析器
+    parser = argparse.ArgumentParser()
+    # 添加 workers 参数，默认为 1 个 worker
+    parser.add_argument("--workers", type=int, default=1, help="Number of workers")
+    # 添加 port 参数，默认端口为 8000
+    parser.add_argument("--port", type=int, default=8000, help="Port number")
+    # 添加 host 参数，默认 host 为 0.0.0.0
+    parser.add_argument("--host", type=str, default="0.0.0.0", help="Host address")
+    # 解析命令行参数
+    args = parser.parse_args()
+    workers = args.workers
+    port = args.port
+    host = args.host
+
+
+    def filter_logs(record):
+        # 过滤 SQLAlchemy 低级别日志
+        if record.name.startswith("sqlalchemy"):
+            if record.levelno < logging.ERROR:
+                return True
+        return False
+
+    run_server(
+        "main:app",
+        host=host,
+        port=port,
+        workers=workers,
+        log_file="logs/app.log", # 日志轮转
+        filter_callbacks=[filter_logs]
+    )
+
