@@ -1,7 +1,7 @@
 import io
 import logging
 import os
-from typing import Callable, Awaitable
+from typing import Callable, Awaitable, Optional, List, Dict
 
 from pydub import AudioSegment
 
@@ -13,8 +13,8 @@ logger = logging.getLogger(__name__)
 def adjust_audio_duration(
     audio_segment: AudioSegment,
     target_duration_ms: int,
-    words: list[dict] | None = None,
-) -> tuple[AudioSegment, list[dict]]:
+    words: Optional[List[Dict]] = None,
+) -> tuple[AudioSegment, List[Dict]]:
     """
     调整音频时长以匹配目标时长
 
@@ -69,8 +69,8 @@ def adjust_audio_duration(
 def align_audio_to_subtitle(
     audio_data: bytes,
     subtitle: Subtitle,
-    words: list[dict] | None = None,
-) -> dict:
+    words: Optional[List[Dict]] = None,
+) -> Dict:
     """
     将 TTS 生成的音频与字幕对齐，调整音频时长匹配字幕时长
 
