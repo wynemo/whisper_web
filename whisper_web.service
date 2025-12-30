@@ -1,0 +1,14 @@
+[Unit]
+Description=Whisper Web Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/whisper_web
+EnvironmentFile=/root/whisper_web/settings.env
+ExecStart=/root/whisper_web/.venv/bin/python main.py
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
