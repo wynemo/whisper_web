@@ -16,6 +16,10 @@ dependencies = [
     "websockets>=15.0.1",
 ]
 
+[project.optional-dependencies]
+# faster-whisper 仅在 Linux 上支持，用于更快的转录速度
+faster = ["faster-whisper>=1.0.0"]
+
 [tool.uv.sources]
 openai-whisper = { git = "https://github.com/openai/whisper.git" }
 fastapi-toolbox = { git = "https://github.com/wynemo/fastapi-utils.git" }
