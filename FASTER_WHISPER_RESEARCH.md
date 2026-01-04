@@ -34,13 +34,36 @@
 
 ## 5. 安装
 
+### 5.1 安装 faster-whisper
+
 ```bash
 pip install faster-whisper
+# 或使用 uv
+uv add faster-whisper
 ```
 
-GPU 支持需要安装 CUDA 相关库：
+### 5.2 安装 cuDNN 9 (Ubuntu 22.04 GPU 加速必需)
+
 ```bash
-pip install nvidia-cublas-cu12 nvidia-cudnn-cu12
+# 1. 添加 NVIDIA 仓库
+wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb
+sudo dpkg -i cuda-keyring_1.1-1_all.deb
+sudo apt update
+
+# 2. 安装 cuDNN 9 for CUDA 12
+sudo apt install libcudnn9-cuda-12
+
+# 3. 验证安装
+ldconfig -p | grep cudnn
+```
+
+### 5.3 验证 GPU 支持
+
+```bash
+# 检查 NVIDIA 驱动
+nvidia-smi
+
+# 应显示 CUDA Version: 12.x
 ```
 
 ## 6. API 使用

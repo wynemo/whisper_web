@@ -11,27 +11,11 @@ import platform
 
 from config import settings
 
-# 自动设置 NVIDIA 库路径 (解决 cuDNN 加载问题)
-def _setup_nvidia_lib_path():
-    """设置 LD_LIBRARY_PATH 以包含 nvidia 库路径"""
-    try:
-        import nvidia.cublas.lib
-        import nvidia.cudnn.lib
-        cublas_path = nvidia.cublas.lib.__path__[0]
-        cudnn_path = nvidia.cudnn.lib.__path__[0]
-        ld_path = os.environ.get("LD_LIBRARY_PATH", "")
-        if cudnn_path not in ld_path:
-            os.environ["LD_LIBRARY_PATH"] = f"{cudnn_path}:{cublas_path}:{ld_path}"
-            logging.getLogger(__name__).info(f"已添加 NVIDIA 库路径: {cudnn_path}, {cublas_path}")
-    except ImportError:
-        pass  # nvidia 库未安装，跳过
-
 # faster-whisper 条件导入 (仅 Linux)
 _faster_whisper_available = False
 _whisper_model = None
 
 if settings.WHISPER_ENGINE == "faster" and platform.system() == "Linux":
-    _setup_nvidia_lib_path()  # 先设置库路径
     try:
         from faster_whisper import WhisperModel
         _faster_whisper_available = True
