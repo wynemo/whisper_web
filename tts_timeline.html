@@ -323,6 +323,113 @@
                 width: 100%;
                 margin-top: 10px;
             }
+            /* Video player section */
+            .video-section {
+                background: #fff;
+                border: 1px solid #ddd;
+                border-radius: 5px;
+                padding: 15px;
+                margin-bottom: 20px;
+            }
+            .video-section h3 {
+                margin: 0 0 15px 0;
+                color: #333;
+            }
+            .video-drop-zone {
+                border: 2px dashed #ccc;
+                border-radius: 5px;
+                padding: 40px 20px;
+                text-align: center;
+                cursor: pointer;
+                transition: all 0.3s;
+                background: #fafafa;
+            }
+            .video-drop-zone:hover,
+            .video-drop-zone.dragover {
+                border-color: #0078d7;
+                background: #f0f7ff;
+            }
+            .video-drop-zone p {
+                margin: 0;
+                color: #666;
+            }
+            .video-drop-zone .hint {
+                font-size: 12px;
+                color: #999;
+                margin-top: 8px;
+            }
+            .video-player-container {
+                display: none;
+            }
+            .video-player-container.show {
+                display: block;
+            }
+            .video-player-container video {
+                width: 100%;
+                max-height: 400px;
+                background: #000;
+                border-radius: 5px;
+            }
+            .video-controls {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                margin-top: 10px;
+                flex-wrap: wrap;
+            }
+            .video-time {
+                font-size: 14px;
+                color: #666;
+                font-family: monospace;
+            }
+            .video-subtitle-display {
+                background: rgba(0, 0, 0, 0.8);
+                color: white;
+                padding: 10px 15px;
+                border-radius: 5px;
+                margin-top: 10px;
+                min-height: 40px;
+                text-align: center;
+                font-size: 16px;
+                display: none;
+            }
+            .video-subtitle-display.show {
+                display: block;
+            }
+            .video-subtitle-display.empty {
+                color: #888;
+                font-style: italic;
+            }
+            /* Timeline playhead */
+            .timeline-playhead {
+                position: absolute;
+                top: 0;
+                bottom: 0;
+                width: 2px;
+                background: #ff0000;
+                z-index: 50;
+                pointer-events: none;
+                display: none;
+            }
+            .timeline-playhead::before {
+                content: '';
+                position: absolute;
+                top: -5px;
+                left: -4px;
+                width: 0;
+                height: 0;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 6px solid #ff0000;
+            }
+            .timeline-playhead.show {
+                display: block;
+            }
+            /* Highlight current segment */
+            .segment-item.current {
+                border-color: #0078d7;
+                box-shadow: 0 0 8px rgba(0, 120, 215, 0.4);
+            }
         </style>
     </head>
     <body>
@@ -334,6 +441,25 @@
 
         <h1>TTS 时间轴编辑器</h1>
         <p>输入文本生成分段语音，可编辑每段并调整时间轴位置</p>
+
+        <!-- Video Player Section -->
+        <div class="video-section">
+            <h3>本地视频预览（可选）</h3>
+            <div class="video-drop-zone" id="videoDropZone">
+                <p>点击选择或拖拽视频文件到此处</p>
+                <p class="hint">支持 MP4、WebM、OGG 等格式，文件不会上传</p>
+                <input type="file" id="videoFileInput" accept="video/*" style="display: none;">
+            </div>
+            <div class="video-player-container" id="videoPlayerContainer">
+                <video id="videoPlayer" controls></video>
+                <div class="video-controls">
+                    <span class="video-time" id="videoTime">00:00.000 / 00:00.000</span>
+                    <button class="btn-small btn-secondary" id="removeVideoBtn">移除视频</button>
+                    <button class="btn-small btn-primary" id="setSegmentStartBtn" title="将当前视频时间设为选中片段的起始时间">设为片段起始时间</button>
+                </div>
+                <div class="video-subtitle-display" id="videoSubtitle"></div>
+            </div>
+        </div>
 
         <div class="input-section">
             <textarea id="textInput" placeholder="请输入要转换的文本...&#10;支持中英文标点符号自动分句（。？！；等）"></textarea>
@@ -348,7 +474,9 @@
                 <span class="total-duration" id="totalDuration">总时长: 0.00s</span>
             </div>
             <div class="timeline-ruler" id="timelineRuler"></div>
-            <div class="timeline-track" id="timelineTrack"></div>
+            <div class="timeline-track" id="timelineTrack">
+                <div class="timeline-playhead" id="timelinePlayhead"></div>
+            </div>
 
             <div class="segment-list" id="segmentList"></div>
 
@@ -392,6 +520,13 @@
         <script>
             const apiBaseUrl = window.location.origin;
 
+            // Video state
+            let videoState = {
+                hasVideo: false,
+                videoUrl: null,
+                selectedSegmentIndex: -1
+            };
+
             // State
             let timelineState = {
                 segments: [],
@@ -427,6 +562,17 @@
             const cancelEditBtn = document.getElementById('cancelEditBtn');
             const saveOffsetBtn = document.getElementById('saveOffsetBtn');
             const regenerateBtn = document.getElementById('regenerateBtn');
+
+            // Video DOM Elements
+            const videoDropZone = document.getElementById('videoDropZone');
+            const videoFileInput = document.getElementById('videoFileInput');
+            const videoPlayerContainer = document.getElementById('videoPlayerContainer');
+            const videoPlayer = document.getElementById('videoPlayer');
+            const videoTime = document.getElementById('videoTime');
+            const removeVideoBtn = document.getElementById('removeVideoBtn');
+            const setSegmentStartBtn = document.getElementById('setSegmentStartBtn');
+            const videoSubtitle = document.getElementById('videoSubtitle');
+            const timelinePlayhead = document.getElementById('timelinePlayhead');
 
             // Utility Functions
             function showStatus(message, type) {
@@ -1006,6 +1152,264 @@
                     downloadSrtBtn.textContent = '下载 SRT 字幕';
                 }
             });
+
+            // ============ Video Player Functions ============
+
+            // Format time for video display
+            function formatVideoTime(seconds) {
+                const mins = Math.floor(seconds / 60);
+                const secs = Math.floor(seconds % 60);
+                const ms = Math.floor((seconds % 1) * 1000);
+                return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
+            }
+
+            // Load video file
+            function loadVideoFile(file) {
+                if (!file || !file.type.startsWith('video/')) {
+                    showStatus('请选择有效的视频文件', 'error');
+                    return;
+                }
+
+                // Revoke previous URL
+                if (videoState.videoUrl) {
+                    URL.revokeObjectURL(videoState.videoUrl);
+                }
+
+                videoState.videoUrl = URL.createObjectURL(file);
+                videoState.hasVideo = true;
+
+                videoPlayer.src = videoState.videoUrl;
+                videoDropZone.style.display = 'none';
+                videoPlayerContainer.classList.add('show');
+                videoSubtitle.classList.add('show');
+
+                showStatus(`已加载视频: ${file.name}`, 'success');
+            }
+
+            // Remove video
+            function removeVideo() {
+                if (videoState.videoUrl) {
+                    URL.revokeObjectURL(videoState.videoUrl);
+                }
+                videoState.videoUrl = null;
+                videoState.hasVideo = false;
+                videoPlayer.src = '';
+                videoPlayerContainer.classList.remove('show');
+                videoDropZone.style.display = 'block';
+                videoSubtitle.classList.remove('show');
+                timelinePlayhead.classList.remove('show');
+            }
+
+            // Video drop zone click
+            videoDropZone.addEventListener('click', () => {
+                videoFileInput.click();
+            });
+
+            // File input change
+            videoFileInput.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) {
+                    loadVideoFile(e.target.files[0]);
+                }
+            });
+
+            // Drag and drop for video
+            videoDropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                videoDropZone.classList.add('dragover');
+            });
+
+            videoDropZone.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                videoDropZone.classList.remove('dragover');
+            });
+
+            videoDropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                videoDropZone.classList.remove('dragover');
+
+                if (e.dataTransfer.files.length > 0) {
+                    loadVideoFile(e.dataTransfer.files[0]);
+                }
+            });
+
+            // Remove video button
+            removeVideoBtn.addEventListener('click', removeVideo);
+
+            // Update video time display and sync subtitle
+            videoPlayer.addEventListener('timeupdate', () => {
+                const currentTime = videoPlayer.currentTime;
+                const duration = videoPlayer.duration || 0;
+
+                videoTime.textContent = `${formatVideoTime(currentTime)} / ${formatVideoTime(duration)}`;
+
+                // Update playhead position on timeline
+                updatePlayhead(currentTime * 1000);
+
+                // Find and display current subtitle
+                updateCurrentSubtitle(currentTime * 1000);
+            });
+
+            // Update playhead position on timeline
+            function updatePlayhead(currentMs) {
+                if (timelineState.segments.length === 0) {
+                    timelinePlayhead.classList.remove('show');
+                    return;
+                }
+
+                timelinePlayhead.classList.add('show');
+                const leftPx = currentMs / 1000 * timelineState.scale;
+                timelinePlayhead.style.left = leftPx + 'px';
+            }
+
+            // Find and display current subtitle based on video time
+            function updateCurrentSubtitle(currentMs) {
+                let foundSegment = null;
+                let foundIndex = -1;
+
+                for (let i = 0; i < timelineState.segments.length; i++) {
+                    const seg = timelineState.segments[i];
+                    const segStart = seg.start_offset_ms;
+                    const segEnd = segStart + seg.duration_ms;
+
+                    if (currentMs >= segStart && currentMs < segEnd) {
+                        foundSegment = seg;
+                        foundIndex = i;
+                        break;
+                    }
+                }
+
+                // Update subtitle display
+                if (foundSegment) {
+                    videoSubtitle.textContent = foundSegment.text;
+                    videoSubtitle.classList.remove('empty');
+                } else {
+                    videoSubtitle.textContent = '(无字幕)';
+                    videoSubtitle.classList.add('empty');
+                }
+
+                // Highlight current segment in list
+                highlightCurrentSegment(foundIndex);
+            }
+
+            // Highlight current segment in list
+            function highlightCurrentSegment(index) {
+                const items = segmentList.querySelectorAll('.segment-item');
+                items.forEach((item, i) => {
+                    if (i === index) {
+                        item.classList.add('current');
+                    } else {
+                        item.classList.remove('current');
+                    }
+                });
+            }
+
+            // Set segment start time from video position
+            setSegmentStartBtn.addEventListener('click', () => {
+                if (videoState.selectedSegmentIndex < 0) {
+                    showStatus('请先点击一个字幕片段以选中它', 'error');
+                    return;
+                }
+
+                const currentMs = Math.round(videoPlayer.currentTime * 1000);
+                timelineState.segments[videoState.selectedSegmentIndex].start_offset_ms = currentMs;
+                renderTimeline();
+                showStatus(`片段 #${videoState.selectedSegmentIndex + 1} 起始时间已设为 ${formatVideoTime(videoPlayer.currentTime)}`, 'success');
+            });
+
+            // Select segment for editing
+            function selectSegment(index) {
+                videoState.selectedSegmentIndex = index;
+
+                // Update visual selection
+                const items = segmentList.querySelectorAll('.segment-item');
+                items.forEach((item, i) => {
+                    if (i === index) {
+                        item.style.outline = '2px solid #0078d7';
+                    } else {
+                        item.style.outline = 'none';
+                    }
+                });
+
+                // Also update timeline track blocks
+                const blocks = timelineTrack.querySelectorAll('.segment-block');
+                blocks.forEach((block, i) => {
+                    if (i === index) {
+                        block.style.outline = '2px solid white';
+                        block.style.outlineOffset = '-2px';
+                    } else {
+                        block.style.outline = 'none';
+                    }
+                });
+            }
+
+            // Click on timeline to seek video
+            timelineTrack.addEventListener('click', (e) => {
+                if (!videoState.hasVideo) return;
+                if (e.target.classList.contains('segment-block') || e.target.classList.contains('drag-handle')) return;
+
+                const rect = timelineTrack.getBoundingClientRect();
+                const clickX = e.clientX - rect.left;
+                const timeMs = clickX / timelineState.scale * 1000;
+                const timeSec = timeMs / 1000;
+
+                if (timeSec >= 0 && timeSec <= videoPlayer.duration) {
+                    videoPlayer.currentTime = timeSec;
+                }
+            });
+
+            // Override renderSegmentList to add selection capability
+            const originalRenderSegmentList = renderSegmentList;
+            renderSegmentList = function() {
+                segmentList.innerHTML = '';
+
+                timelineState.segments.forEach((seg, index) => {
+                    const item = document.createElement('div');
+                    item.className = 'segment-item';
+                    if (videoState.selectedSegmentIndex === index) {
+                        item.style.outline = '2px solid #0078d7';
+                    }
+                    item.innerHTML = `
+                        <div class="segment-item-header">
+                            <span class="segment-index">#${index + 1}</span>
+                            <span class="segment-timing">
+                                起始: ${formatTimeMs(seg.start_offset_ms)} | 时长: ${formatTime(seg.duration_ms)}
+                            </span>
+                        </div>
+                        <div class="segment-text">${escapeHtml(seg.text)}</div>
+                        <div class="segment-actions">
+                            <button class="btn-success btn-small" onclick="playSegment(${index})">播放</button>
+                            <button class="btn-primary btn-small" onclick="openEditModal(${index})">编辑</button>
+                            <button class="btn-secondary btn-small" onclick="deleteSegment(${index})">删除</button>
+                            ${videoState.hasVideo ? `<button class="btn-small" style="background:#17a2b8;color:white" onclick="jumpToSegment(${index})">跳转视频</button>` : ''}
+                        </div>
+                    `;
+
+                    // Click to select segment
+                    item.addEventListener('click', (e) => {
+                        if (e.target.tagName !== 'BUTTON') {
+                            selectSegment(index);
+                        }
+                    });
+
+                    segmentList.appendChild(item);
+                });
+            };
+
+            // Jump video to segment start time
+            function jumpToSegment(index) {
+                if (!videoState.hasVideo) return;
+                const seg = timelineState.segments[index];
+                if (!seg) return;
+
+                videoPlayer.currentTime = seg.start_offset_ms / 1000;
+                selectSegment(index);
+            }
+
+            // Make jumpToSegment available globally
+            window.jumpToSegment = jumpToSegment;
         </script>
     </body>
 </html>
