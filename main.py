@@ -403,6 +403,16 @@ class MergeRequest(BaseModel):
     segments: List[AudioSegmentInput]
 
 
+class SrtSegmentInput(BaseModel):
+    text: str
+    start_offset_ms: int
+    duration_ms: int
+
+
+class GenerateSrtRequest(BaseModel):
+    segments: List[SrtSegmentInput]
+
+
 @app.post("/merge-audio/")
 async def merge_audio(request: MergeRequest):
     """
@@ -446,6 +456,43 @@ async def merge_audio(request: MergeRequest):
         content=audio_bytes,
         media_type="audio/mpeg",
         headers={"Content-Disposition": "attachment; filename=merged_audio.mp3"},
+    )
+
+
+@app.post("/generate-srt/")
+async def generate_srt(request: GenerateSrtRequest):
+    """
+    根据时间轴片段生成 SRT 字幕文件
+
+    1. 接收片段列表（文本、起始时间、时长）
+    2. 按起始时间排序
+    3. 生成 SRT 格式字幕
+    4. 返回 SRT 文件
+    """
+    if not request.segments:
+        return {"error": "没有片段数据"}
+
+    # 按 start_offset_ms 排序
+    sorted_segments = sorted(request.segments, key=lambda x: x.start_offset_ms)
+
+    # 生成 SRT 内容
+    srt_lines = []
+    for i, seg in enumerate(sorted_segments, start=1):
+        start_seconds = seg.start_offset_ms / 1000.0
+        end_seconds = (seg.start_offset_ms + seg.duration_ms) / 1000.0
+
+        start_ts = _format_timestamp_srt(start_seconds)
+        end_ts = _format_timestamp_srt(end_seconds)
+
+        srt_entry = f"{i}\n{start_ts} --> {end_ts}\n{seg.text}\n"
+        srt_lines.append(srt_entry)
+
+    srt_content = "\n".join(srt_lines)
+
+    return Response(
+        content=srt_content.encode("utf-8"),
+        media_type="text/plain; charset=utf-8",
+        headers={"Content-Disposition": "attachment; filename=timeline.srt"},
     )
 
 

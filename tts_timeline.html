@@ -331,6 +331,7 @@
                 <button id="playAllBtn" class="btn-success" disabled>播放全部</button>
                 <button id="stopBtn" class="btn-secondary" disabled>停止</button>
                 <button id="downloadBtn" class="btn-primary" disabled>下载合并音频</button>
+                <button id="downloadSrtBtn" class="btn-primary" disabled>下载 SRT 字幕</button>
             </div>
         </div>
 
@@ -391,6 +392,7 @@
             const playAllBtn = document.getElementById('playAllBtn');
             const stopBtn = document.getElementById('stopBtn');
             const downloadBtn = document.getElementById('downloadBtn');
+            const downloadSrtBtn = document.getElementById('downloadSrtBtn');
             const editModal = document.getElementById('editModal');
             const editSegmentIndex = document.getElementById('editSegmentIndex');
             const editText = document.getElementById('editText');
@@ -461,6 +463,7 @@
                 // Enable buttons
                 playAllBtn.disabled = timelineState.segments.length === 0;
                 downloadBtn.disabled = timelineState.segments.length === 0;
+                downloadSrtBtn.disabled = timelineState.segments.length === 0;
             }
 
             function renderRuler(totalMs) {
@@ -830,6 +833,53 @@
                 } finally {
                     downloadBtn.disabled = false;
                     downloadBtn.textContent = '下载合并音频';
+                }
+            });
+
+            // Download SRT
+            downloadSrtBtn.addEventListener('click', async () => {
+                if (timelineState.segments.length === 0) return;
+
+                downloadSrtBtn.disabled = true;
+                downloadSrtBtn.textContent = '生成中...';
+
+                // Prepare segments data for API
+                const segmentsData = timelineState.segments.map(seg => ({
+                    text: seg.text,
+                    start_offset_ms: seg.start_offset_ms,
+                    duration_ms: seg.duration_ms
+                }));
+
+                try {
+                    const response = await fetch(`${apiBaseUrl}/generate-srt/`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ segments: segmentsData })
+                    });
+
+                    if (response.ok) {
+                        const blob = await response.blob();
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'timeline.srt';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                        showStatus('SRT 下载完成', 'success');
+                    } else {
+                        const data = await response.json();
+                        showStatus('生成 SRT 失败: ' + (data.error || '未知错误'), 'error');
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    showStatus('下载 SRT 失败: ' + error.message, 'error');
+                } finally {
+                    downloadSrtBtn.disabled = false;
+                    downloadSrtBtn.textContent = '下载 SRT 字幕';
                 }
             });
         </script>
