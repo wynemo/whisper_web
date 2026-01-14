@@ -1,5 +1,12 @@
 import argparse
-from fastapi import FastAPI, File, UploadFile, WebSocket, WebSocketDisconnect
+import base64
+import io
+import re
+from typing import Optional
+
+from pydub import AudioSegment
+
+from fastapi import FastAPI, File, Form, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi_toolbox import run_server
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
@@ -33,6 +40,7 @@ from utils.audio_aligner import (
     align_audio_to_subtitle_with_retry,
     merge_aligned_audios,
     export_audio_bytes,
+    adjust_audio_duration,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -117,6 +125,13 @@ async def _transcribe_with_faster_whisper(filename: str, websocket: WebSocket):
     await websocket.send_text(f"\n转录完成! 共 {segment_count} 个片段")
     await websocket.send_text(f"SRT 文件已保存: {os.path.basename(srt_filename)}")
 
+
+def split_sentences(text: str) -> list[str]:
+    """将文本按标点符号分割成句子"""
+    # 按中英文标点分句，保留标点符号
+    sentences = re.split(r'(?<=[。？?！!；;\n])', text)
+    # 过滤空白句子
+    return [s.strip() for s in sentences if s.strip()]
 
 app = FastAPI()
 
@@ -281,6 +296,93 @@ async def srt_to_speech(file: UploadFile = File(...)):
         media_type="audio/mpeg",
         headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"},
     )
+
+
+@app.post("/text-to-speech/")
+async def text_to_speech_api(
+    text: str = Form(...),
+    duration_seconds: Optional[float] = Form(None),
+):
+    """
+    将纯文本转换为语音
+
+    1. 自动分句
+    2. 逐句生成语音
+    3. 如果指定了目标时长，按比例调整每句音频时长
+    4. 返回 JSON，包含每句的文本和 Base64 编码的音频
+    """
+    # 分句处理
+    sentences = split_sentences(text)
+    if not sentences:
+        return {"error": "无法分割文本，请确保文本包含有效内容"}
+
+    logger.info(f"分割成 {len(sentences)} 个句子")
+
+    # 逐句生成语音
+    segments = []
+    for i, sentence in enumerate(sentences):
+        logger.info(f"处理句子 {i+1}/{len(sentences)}: {sentence[:20]}...")
+
+        try:
+            audio_data, _, _ = await text_to_speech(
+                text=sentence,
+                appid=settings.DOUBAO_APPID,
+                access_token=settings.DOUBAO_ACCESS_TOKEN,
+                voice_type=settings.DOUBAO_DEFAULT_VOICE_TYPE,
+                resource_id=settings.DOUBAO_RESOURCE_ID,
+            )
+            audio_segment = AudioSegment.from_file(io.BytesIO(audio_data))
+
+            segments.append({
+                "text": sentence,
+                "audio_segment": audio_segment,
+                "duration_ms": len(audio_segment),
+            })
+
+        except Exception as e:
+            logger.error(f"处理句子 {i+1} 失败: {e}")
+            continue
+
+    if not segments:
+        return {"error": "所有句子处理失败"}
+
+    # 计算总时长
+    total_duration_ms = sum(seg["duration_ms"] for seg in segments)
+
+    # 如果指定了目标时长，按比例调整每句音频
+    if duration_seconds is not None:
+        target_total_ms = int(duration_seconds * 1000)
+        if target_total_ms > 0 and total_duration_ms > 0:
+            ratio = target_total_ms / total_duration_ms
+
+            for seg in segments:
+                target_duration_ms = int(seg["duration_ms"] * ratio)
+                adjusted_audio, _ = adjust_audio_duration(
+                    seg["audio_segment"], target_duration_ms
+                )
+                seg["audio_segment"] = adjusted_audio
+                seg["duration_ms"] = len(adjusted_audio)
+
+            # 重新计算总时长
+            total_duration_ms = sum(seg["duration_ms"] for seg in segments)
+
+    # 构建返回结果
+    result_segments = []
+    for seg in segments:
+        # 导出为 MP3 并编码为 Base64
+        audio_bytes = export_audio_bytes(seg["audio_segment"], format="mp3")
+        audio_base64 = base64.b64encode(audio_bytes).decode("utf-8")
+
+        result_segments.append({
+            "text": seg["text"],
+            "audio": audio_base64,
+            "duration_ms": seg["duration_ms"],
+        })
+
+    return {
+        "segments": result_segments,
+        "total_duration_ms": total_duration_ms,
+    }
 
 
 # uv run uvicorn main:app 开发模式
