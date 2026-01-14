@@ -183,6 +183,31 @@
             .segment-block.playing {
                 background: #28a745;
             }
+            .segment-block.dragging {
+                opacity: 0.7;
+                z-index: 100;
+                cursor: grabbing;
+            }
+            .segment-block .drag-handle {
+                position: absolute;
+                left: 0;
+                top: 0;
+                bottom: 0;
+                width: 12px;
+                cursor: grab;
+                background: rgba(255, 255, 255, 0.3);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 10px;
+            }
+            .segment-block .drag-handle:hover {
+                background: rgba(255, 255, 255, 0.5);
+            }
+            .segment-block .drag-handle::before {
+                content: '⋮⋮';
+                color: rgba(255, 255, 255, 0.8);
+            }
             .segment-list {
                 margin-top: 20px;
             }
@@ -493,12 +518,97 @@
                     block.style.left = (seg.start_offset_ms / 1000 * timelineState.scale) + 'px';
                     block.style.width = Math.max(20, seg.duration_ms / 1000 * timelineState.scale) + 'px';
                     block.style.backgroundColor = colors[index % colors.length];
-                    block.textContent = '#' + (index + 1);
+                    block.dataset.index = index;
+
+                    // Add drag handle
+                    const dragHandle = document.createElement('div');
+                    dragHandle.className = 'drag-handle';
+                    block.appendChild(dragHandle);
+
+                    // Add label
+                    const label = document.createElement('span');
+                    label.style.marginLeft = '12px';
+                    label.textContent = '#' + (index + 1);
+                    block.appendChild(label);
+
                     block.title = seg.text.substring(0, 50) + (seg.text.length > 50 ? '...' : '');
-                    block.onclick = () => playSegment(index);
+
+                    // Click to play (but not on drag handle)
+                    block.addEventListener('click', (e) => {
+                        if (!e.target.classList.contains('drag-handle')) {
+                            playSegment(index);
+                        }
+                    });
+
+                    // Drag functionality
+                    initDragForBlock(block, index);
+
                     timelineTrack.appendChild(block);
                 });
             }
+
+            // Drag and drop functionality
+            let dragState = {
+                isDragging: false,
+                currentBlock: null,
+                currentIndex: -1,
+                startX: 0,
+                startLeft: 0
+            };
+
+            function initDragForBlock(block, index) {
+                const dragHandle = block.querySelector('.drag-handle');
+
+                dragHandle.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    dragState.isDragging = true;
+                    dragState.currentBlock = block;
+                    dragState.currentIndex = index;
+                    dragState.startX = e.clientX;
+                    dragState.startLeft = timelineState.segments[index].start_offset_ms / 1000 * timelineState.scale;
+
+                    block.classList.add('dragging');
+                    document.body.style.cursor = 'grabbing';
+                });
+            }
+
+            document.addEventListener('mousemove', (e) => {
+                if (!dragState.isDragging || !dragState.currentBlock) return;
+
+                const deltaX = e.clientX - dragState.startX;
+                let newLeft = dragState.startLeft + deltaX;
+
+                // Constrain to track bounds
+                newLeft = Math.max(0, newLeft);
+
+                dragState.currentBlock.style.left = newLeft + 'px';
+            });
+
+            document.addEventListener('mouseup', (e) => {
+                if (!dragState.isDragging || !dragState.currentBlock) return;
+
+                const deltaX = e.clientX - dragState.startX;
+                let newLeft = dragState.startLeft + deltaX;
+                newLeft = Math.max(0, newLeft);
+
+                // Convert pixels back to milliseconds
+                const newOffsetMs = Math.round(newLeft / timelineState.scale * 1000);
+
+                // Update segment offset
+                timelineState.segments[dragState.currentIndex].start_offset_ms = newOffsetMs;
+
+                // Reset drag state
+                dragState.currentBlock.classList.remove('dragging');
+                document.body.style.cursor = '';
+                dragState.isDragging = false;
+                dragState.currentBlock = null;
+                dragState.currentIndex = -1;
+
+                // Re-render to update everything
+                renderTimeline();
+            });
 
             function renderSegmentList() {
                 segmentList.innerHTML = '';
