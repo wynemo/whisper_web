@@ -590,14 +590,28 @@
                 if (!dragState.isDragging || !dragState.currentBlock) return;
 
                 const deltaX = e.clientX - dragState.startX;
-                let newLeft = dragState.startLeft + deltaX;
-                newLeft = Math.max(0, newLeft);
+                // Convert delta pixels to milliseconds
+                const deltaMs = Math.round(deltaX / timelineState.scale * 1000);
 
-                // Convert pixels back to milliseconds
-                const newOffsetMs = Math.round(newLeft / timelineState.scale * 1000);
+                // Get the current segment's start offset
+                const currentSegment = timelineState.segments[dragState.currentIndex];
+                const currentStartMs = currentSegment.start_offset_ms;
 
-                // Update segment offset
-                timelineState.segments[dragState.currentIndex].start_offset_ms = newOffsetMs;
+                // Calculate new offset (ensure it doesn't go below 0)
+                const newOffsetMs = Math.max(0, currentStartMs + deltaMs);
+                const actualDeltaMs = newOffsetMs - currentStartMs;
+
+                // Update current segment
+                currentSegment.start_offset_ms = newOffsetMs;
+
+                // Move all segments to the right of current segment by the same delta
+                if (actualDeltaMs !== 0) {
+                    timelineState.segments.forEach((seg, index) => {
+                        if (index !== dragState.currentIndex && seg.start_offset_ms > currentStartMs) {
+                            seg.start_offset_ms = Math.max(0, seg.start_offset_ms + actualDeltaMs);
+                        }
+                    });
+                }
 
                 // Reset drag state
                 dragState.currentBlock.classList.remove('dragging');

@@ -419,7 +419,7 @@ async def merge_audio(request: MergeRequest):
     合并多个音频片段，按时间轴位置排列
 
     1. 接收 Base64 编码的音频片段和时间偏移
-    2. 按时间位置叠加音频
+    2. 按时间位置拼接音频（保留空白间隙）
     3. 返回合并后的 MP3 文件
     """
     if not request.segments:
@@ -428,26 +428,38 @@ async def merge_audio(request: MergeRequest):
     # 按 start_offset_ms 排序
     sorted_segments = sorted(request.segments, key=lambda x: x.start_offset_ms)
 
-    # 计算总时长（最后一个片段的结束位置）
+    # 先解码所有音频，计算实际总时长
+    decoded_segments = []
+    for seg in sorted_segments:
+        try:
+            audio_bytes = base64.b64decode(seg.audio)
+            audio_segment = AudioSegment.from_file(io.BytesIO(audio_bytes))
+            decoded_segments.append({
+                "audio": audio_segment,
+                "start_offset_ms": seg.start_offset_ms,
+                "actual_duration_ms": len(audio_segment),
+            })
+        except Exception as e:
+            logger.error(f"解码音频片段失败: {e}")
+            continue
+
+    if not decoded_segments:
+        return {"error": "所有音频片段解码失败"}
+
+    # 计算总时长（使用实际音频长度）
     total_duration_ms = max(
-        seg.start_offset_ms + seg.duration_ms for seg in sorted_segments
+        seg["start_offset_ms"] + seg["actual_duration_ms"]
+        for seg in decoded_segments
     )
 
     # 创建静音的基底音频
     merged_audio = AudioSegment.silent(duration=total_duration_ms)
 
     # 逐个叠加音频
-    for seg in sorted_segments:
-        try:
-            # 解码 Base64 音频
-            audio_bytes = base64.b64decode(seg.audio)
-            audio_segment = AudioSegment.from_file(io.BytesIO(audio_bytes))
-
-            # 在指定位置叠加音频
-            merged_audio = merged_audio.overlay(audio_segment, position=seg.start_offset_ms)
-        except Exception as e:
-            logger.error(f"处理音频片段失败: {e}")
-            continue
+    for seg in decoded_segments:
+        merged_audio = merged_audio.overlay(
+            seg["audio"], position=seg["start_offset_ms"]
+        )
 
     # 导出为 MP3
     audio_bytes = export_audio_bytes(merged_audio, format="mp3")
