@@ -1,0 +1,837 @@
+<!doctype html>
+<html lang="zh-CN">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>TTS 时间轴编辑器</title>
+        <style>
+            * {
+                box-sizing: border-box;
+            }
+            body {
+                font-family: Arial, sans-serif;
+                background-color: #f4f4f9;
+                margin: 0;
+                padding: 20px;
+                max-width: 1000px;
+                margin: 0 auto;
+            }
+            nav {
+                margin-bottom: 20px;
+            }
+            nav a {
+                margin-right: 15px;
+                color: #0078d7;
+                text-decoration: none;
+                font-weight: bold;
+            }
+            nav a:hover {
+                text-decoration: underline;
+            }
+            h1 {
+                color: #333;
+            }
+            .input-section {
+                margin-bottom: 20px;
+            }
+            textarea {
+                width: 100%;
+                height: 120px;
+                padding: 12px;
+                border: 1px solid #ccc;
+                border-radius: 5px;
+                font-size: 14px;
+                resize: vertical;
+            }
+            textarea:focus {
+                outline: none;
+                border-color: #0078d7;
+            }
+            button {
+                padding: 10px 20px;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+                font-size: 14px;
+                margin-right: 10px;
+                margin-top: 10px;
+            }
+            button:disabled {
+                background-color: #ccc;
+                cursor: not-allowed;
+            }
+            .btn-primary {
+                background-color: #0078d7;
+                color: white;
+            }
+            .btn-primary:hover:not(:disabled) {
+                background-color: #005a9e;
+            }
+            .btn-success {
+                background-color: #28a745;
+                color: white;
+            }
+            .btn-success:hover:not(:disabled) {
+                background-color: #218838;
+            }
+            .btn-secondary {
+                background-color: #6c757d;
+                color: white;
+            }
+            .btn-secondary:hover:not(:disabled) {
+                background-color: #5a6268;
+            }
+            .btn-small {
+                padding: 5px 10px;
+                font-size: 12px;
+                margin: 2px;
+            }
+            .status {
+                margin-top: 15px;
+                padding: 12px;
+                border-radius: 5px;
+                display: none;
+            }
+            .status.loading {
+                display: block;
+                background-color: #fff3cd;
+                color: #856404;
+            }
+            .status.success {
+                display: block;
+                background-color: #d4edda;
+                color: #155724;
+            }
+            .status.error {
+                display: block;
+                background-color: #f8d7da;
+                color: #721c24;
+            }
+            .timeline-container {
+                background: #fff;
+                border: 1px solid #ddd;
+                border-radius: 5px;
+                padding: 15px;
+                margin-top: 20px;
+                display: none;
+            }
+            .timeline-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 15px;
+            }
+            .timeline-header h3 {
+                margin: 0;
+                color: #333;
+            }
+            .total-duration {
+                font-size: 14px;
+                color: #666;
+            }
+            .timeline-ruler {
+                position: relative;
+                height: 25px;
+                background: #f8f9fa;
+                border-bottom: 1px solid #ddd;
+                margin-bottom: 5px;
+                overflow: hidden;
+            }
+            .ruler-mark {
+                position: absolute;
+                bottom: 0;
+                font-size: 10px;
+                color: #666;
+                transform: translateX(-50%);
+            }
+            .ruler-mark::before {
+                content: '';
+                position: absolute;
+                bottom: 12px;
+                left: 50%;
+                width: 1px;
+                height: 8px;
+                background: #999;
+            }
+            .timeline-track {
+                position: relative;
+                height: 50px;
+                background: #e9ecef;
+                border-radius: 3px;
+                overflow: hidden;
+            }
+            .segment-block {
+                position: absolute;
+                height: 100%;
+                background: #0078d7;
+                border-radius: 3px;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: white;
+                font-size: 12px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                padding: 0 5px;
+                transition: background-color 0.2s;
+            }
+            .segment-block:hover {
+                background: #005a9e;
+            }
+            .segment-block.playing {
+                background: #28a745;
+            }
+            .segment-list {
+                margin-top: 20px;
+            }
+            .segment-item {
+                background: #fff;
+                border: 1px solid #ddd;
+                border-radius: 5px;
+                padding: 12px;
+                margin-bottom: 10px;
+            }
+            .segment-item-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 8px;
+            }
+            .segment-index {
+                font-weight: bold;
+                color: #0078d7;
+            }
+            .segment-timing {
+                font-size: 12px;
+                color: #666;
+            }
+            .segment-text {
+                background: #f8f9fa;
+                padding: 8px;
+                border-radius: 3px;
+                margin-bottom: 8px;
+                font-size: 14px;
+                color: #333;
+            }
+            .segment-actions {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 5px;
+            }
+            .action-buttons {
+                margin-top: 20px;
+                padding-top: 15px;
+                border-top: 1px solid #ddd;
+            }
+            /* Modal */
+            .modal {
+                display: none;
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.5);
+                z-index: 1000;
+                align-items: center;
+                justify-content: center;
+            }
+            .modal.show {
+                display: flex;
+            }
+            .modal-content {
+                background: white;
+                padding: 20px;
+                border-radius: 8px;
+                width: 90%;
+                max-width: 500px;
+                max-height: 90vh;
+                overflow-y: auto;
+            }
+            .modal-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 15px;
+            }
+            .modal-header h3 {
+                margin: 0;
+            }
+            .modal-close {
+                background: none;
+                border: none;
+                font-size: 24px;
+                cursor: pointer;
+                color: #666;
+                padding: 0;
+                margin: 0;
+            }
+            .form-group {
+                margin-bottom: 15px;
+            }
+            .form-group label {
+                display: block;
+                margin-bottom: 5px;
+                font-weight: bold;
+                color: #333;
+            }
+            .form-group input,
+            .form-group textarea {
+                width: 100%;
+                padding: 8px;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+            }
+            .form-group small {
+                color: #666;
+                font-size: 12px;
+            }
+            .modal-actions {
+                display: flex;
+                justify-content: flex-end;
+                gap: 10px;
+                margin-top: 20px;
+            }
+            audio {
+                width: 100%;
+                margin-top: 10px;
+            }
+        </style>
+    </head>
+    <body>
+        <nav>
+            <a href="/">首页</a>
+            <a href="/srt-to-speech">SRT to Speech</a>
+            <a href="/tts-timeline">TTS 时间轴</a>
+        </nav>
+
+        <h1>TTS 时间轴编辑器</h1>
+        <p>输入文本生成分段语音，可编辑每段并调整时间轴位置</p>
+
+        <div class="input-section">
+            <textarea id="textInput" placeholder="请输入要转换的文本...&#10;支持中英文标点符号自动分句（。？！；等）"></textarea>
+            <button id="generateBtn" class="btn-primary">生成语音</button>
+        </div>
+
+        <div class="status" id="status"></div>
+
+        <div class="timeline-container" id="timelineContainer">
+            <div class="timeline-header">
+                <h3>时间轴</h3>
+                <span class="total-duration" id="totalDuration">总时长: 0.00s</span>
+            </div>
+            <div class="timeline-ruler" id="timelineRuler"></div>
+            <div class="timeline-track" id="timelineTrack"></div>
+
+            <div class="segment-list" id="segmentList"></div>
+
+            <div class="action-buttons">
+                <button id="playAllBtn" class="btn-success" disabled>播放全部</button>
+                <button id="stopBtn" class="btn-secondary" disabled>停止</button>
+                <button id="downloadBtn" class="btn-primary" disabled>下载合并音频</button>
+            </div>
+        </div>
+
+        <!-- Edit Modal -->
+        <div class="modal" id="editModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>编辑片段 #<span id="editSegmentIndex"></span></h3>
+                    <button class="modal-close" id="modalClose">&times;</button>
+                </div>
+                <div class="form-group">
+                    <label for="editText">文本内容</label>
+                    <textarea id="editText" rows="3"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="editDuration">目标时长 (秒)</label>
+                    <input type="number" id="editDuration" step="0.1" min="0" placeholder="留空则自动">
+                    <small>留空则按自然语速生成</small>
+                </div>
+                <div class="form-group">
+                    <label for="editOffset">起始位置 (毫秒)</label>
+                    <input type="number" id="editOffset" step="100" min="0">
+                    <small>该片段在时间轴上的开始时间点</small>
+                </div>
+                <div class="modal-actions">
+                    <button id="cancelEditBtn" class="btn-secondary">取消</button>
+                    <button id="saveOffsetBtn" class="btn-primary">仅保存位置</button>
+                    <button id="regenerateBtn" class="btn-success">重新生成</button>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            const apiBaseUrl = window.location.origin;
+
+            // State
+            let timelineState = {
+                segments: [],
+                totalDuration_ms: 0,
+                scale: 50, // pixels per second
+                isPlaying: false,
+                currentPlayingIndex: -1,
+                playbackTimeouts: []
+            };
+
+            let currentEditIndex = -1;
+            let currentAudio = null;
+
+            // DOM Elements
+            const textInput = document.getElementById('textInput');
+            const generateBtn = document.getElementById('generateBtn');
+            const statusDiv = document.getElementById('status');
+            const timelineContainer = document.getElementById('timelineContainer');
+            const timelineRuler = document.getElementById('timelineRuler');
+            const timelineTrack = document.getElementById('timelineTrack');
+            const segmentList = document.getElementById('segmentList');
+            const totalDurationSpan = document.getElementById('totalDuration');
+            const playAllBtn = document.getElementById('playAllBtn');
+            const stopBtn = document.getElementById('stopBtn');
+            const downloadBtn = document.getElementById('downloadBtn');
+            const editModal = document.getElementById('editModal');
+            const editSegmentIndex = document.getElementById('editSegmentIndex');
+            const editText = document.getElementById('editText');
+            const editDuration = document.getElementById('editDuration');
+            const editOffset = document.getElementById('editOffset');
+            const modalClose = document.getElementById('modalClose');
+            const cancelEditBtn = document.getElementById('cancelEditBtn');
+            const saveOffsetBtn = document.getElementById('saveOffsetBtn');
+            const regenerateBtn = document.getElementById('regenerateBtn');
+
+            // Utility Functions
+            function showStatus(message, type) {
+                statusDiv.textContent = message;
+                statusDiv.className = 'status ' + type;
+            }
+
+            function hideStatus() {
+                statusDiv.className = 'status';
+            }
+
+            function formatTime(ms) {
+                const seconds = ms / 1000;
+                return seconds.toFixed(2) + 's';
+            }
+
+            function formatTimeMs(ms) {
+                return ms.toFixed(0) + 'ms';
+            }
+
+            function base64ToBlob(base64, mimeType) {
+                const byteCharacters = atob(base64);
+                const byteNumbers = new Array(byteCharacters.length);
+                for (let i = 0; i < byteCharacters.length; i++) {
+                    byteNumbers[i] = byteCharacters.charCodeAt(i);
+                }
+                const byteArray = new Uint8Array(byteNumbers);
+                return new Blob([byteArray], { type: mimeType });
+            }
+
+            // Calculate timeline end (max of segment end times)
+            function calculateTimelineEnd() {
+                if (timelineState.segments.length === 0) return 0;
+                let maxEnd = 0;
+                for (const seg of timelineState.segments) {
+                    const end = seg.start_offset_ms + seg.duration_ms;
+                    if (end > maxEnd) maxEnd = end;
+                }
+                return maxEnd;
+            }
+
+            // Render Timeline
+            function renderTimeline() {
+                const totalMs = calculateTimelineEnd();
+                timelineState.totalDuration_ms = totalMs;
+                totalDurationSpan.textContent = '总时长: ' + formatTime(totalMs);
+
+                // Adjust scale based on container width
+                const containerWidth = timelineTrack.offsetWidth;
+                const totalSeconds = totalMs / 1000;
+                if (totalSeconds > 0) {
+                    timelineState.scale = Math.max(20, containerWidth / totalSeconds);
+                }
+
+                renderRuler(totalMs);
+                renderTrack();
+                renderSegmentList();
+
+                // Enable buttons
+                playAllBtn.disabled = timelineState.segments.length === 0;
+                downloadBtn.disabled = timelineState.segments.length === 0;
+            }
+
+            function renderRuler(totalMs) {
+                timelineRuler.innerHTML = '';
+                const totalSeconds = Math.ceil(totalMs / 1000);
+                const interval = totalSeconds <= 10 ? 1 : totalSeconds <= 30 ? 5 : 10;
+
+                for (let s = 0; s <= totalSeconds; s += interval) {
+                    const mark = document.createElement('div');
+                    mark.className = 'ruler-mark';
+                    mark.style.left = (s * timelineState.scale) + 'px';
+                    mark.textContent = s + 's';
+                    timelineRuler.appendChild(mark);
+                }
+            }
+
+            function renderTrack() {
+                timelineTrack.innerHTML = '';
+                const colors = ['#0078d7', '#28a745', '#dc3545', '#ffc107', '#17a2b8', '#6f42c1'];
+
+                timelineState.segments.forEach((seg, index) => {
+                    const block = document.createElement('div');
+                    block.className = 'segment-block';
+                    if (timelineState.currentPlayingIndex === index) {
+                        block.classList.add('playing');
+                    }
+                    block.style.left = (seg.start_offset_ms / 1000 * timelineState.scale) + 'px';
+                    block.style.width = Math.max(20, seg.duration_ms / 1000 * timelineState.scale) + 'px';
+                    block.style.backgroundColor = colors[index % colors.length];
+                    block.textContent = '#' + (index + 1);
+                    block.title = seg.text.substring(0, 50) + (seg.text.length > 50 ? '...' : '');
+                    block.onclick = () => playSegment(index);
+                    timelineTrack.appendChild(block);
+                });
+            }
+
+            function renderSegmentList() {
+                segmentList.innerHTML = '';
+
+                timelineState.segments.forEach((seg, index) => {
+                    const item = document.createElement('div');
+                    item.className = 'segment-item';
+                    item.innerHTML = `
+                        <div class="segment-item-header">
+                            <span class="segment-index">#${index + 1}</span>
+                            <span class="segment-timing">
+                                起始: ${formatTimeMs(seg.start_offset_ms)} | 时长: ${formatTime(seg.duration_ms)}
+                            </span>
+                        </div>
+                        <div class="segment-text">${escapeHtml(seg.text)}</div>
+                        <div class="segment-actions">
+                            <button class="btn-success btn-small" onclick="playSegment(${index})">播放</button>
+                            <button class="btn-primary btn-small" onclick="openEditModal(${index})">编辑</button>
+                            <button class="btn-secondary btn-small" onclick="deleteSegment(${index})">删除</button>
+                        </div>
+                    `;
+                    segmentList.appendChild(item);
+                });
+            }
+
+            function escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
+            // Generate Speech
+            generateBtn.addEventListener('click', async () => {
+                const text = textInput.value.trim();
+                if (!text) {
+                    showStatus('请输入文本', 'error');
+                    return;
+                }
+
+                generateBtn.disabled = true;
+                showStatus('正在生成语音，请稍候...', 'loading');
+                timelineContainer.style.display = 'none';
+
+                const formData = new FormData();
+                formData.append('text', text);
+
+                try {
+                    const response = await fetch(`${apiBaseUrl}/text-to-speech/`, {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok && data.segments) {
+                        // Process segments
+                        timelineState.segments = [];
+                        let cumulativeOffset = 0;
+
+                        for (let i = 0; i < data.segments.length; i++) {
+                            const seg = data.segments[i];
+                            const blob = base64ToBlob(seg.audio, 'audio/mpeg');
+                            const audioUrl = URL.createObjectURL(blob);
+
+                            timelineState.segments.push({
+                                id: i,
+                                text: seg.text,
+                                audio: seg.audio,
+                                duration_ms: seg.duration_ms,
+                                start_offset_ms: cumulativeOffset,
+                                audioBlob: blob,
+                                audioUrl: audioUrl
+                            });
+
+                            cumulativeOffset += seg.duration_ms;
+                        }
+
+                        timelineState.totalDuration_ms = data.total_duration_ms;
+                        timelineContainer.style.display = 'block';
+                        renderTimeline();
+                        showStatus(`成功生成 ${data.segments.length} 个片段`, 'success');
+                    } else {
+                        showStatus('生成失败: ' + (data.error || '未知错误'), 'error');
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    showStatus('请求失败: ' + error.message, 'error');
+                } finally {
+                    generateBtn.disabled = false;
+                }
+            });
+
+            // Playback
+            function playSegment(index) {
+                stopPlayback();
+                const seg = timelineState.segments[index];
+                if (!seg) return;
+
+                currentAudio = new Audio(seg.audioUrl);
+                timelineState.currentPlayingIndex = index;
+                renderTrack();
+
+                currentAudio.onended = () => {
+                    timelineState.currentPlayingIndex = -1;
+                    renderTrack();
+                    stopBtn.disabled = true;
+                };
+
+                currentAudio.play();
+                stopBtn.disabled = false;
+            }
+
+            playAllBtn.addEventListener('click', () => {
+                if (timelineState.segments.length === 0) return;
+                stopPlayback();
+                timelineState.isPlaying = true;
+                playAllBtn.disabled = true;
+                stopBtn.disabled = false;
+
+                // Sort segments by start_offset_ms
+                const sortedSegments = [...timelineState.segments].sort((a, b) => a.start_offset_ms - b.start_offset_ms);
+
+                // Schedule playback based on start offsets
+                const startTime = Date.now();
+                sortedSegments.forEach((seg, i) => {
+                    const delay = seg.start_offset_ms;
+                    const timeout = setTimeout(() => {
+                        if (!timelineState.isPlaying) return;
+                        const originalIndex = timelineState.segments.findIndex(s => s.id === seg.id);
+                        currentAudio = new Audio(seg.audioUrl);
+                        timelineState.currentPlayingIndex = originalIndex;
+                        renderTrack();
+
+                        currentAudio.onended = () => {
+                            if (i === sortedSegments.length - 1) {
+                                // Last segment finished
+                                timelineState.isPlaying = false;
+                                timelineState.currentPlayingIndex = -1;
+                                renderTrack();
+                                playAllBtn.disabled = false;
+                                stopBtn.disabled = true;
+                            }
+                        };
+
+                        currentAudio.play();
+                    }, delay);
+                    timelineState.playbackTimeouts.push(timeout);
+                });
+            });
+
+            stopBtn.addEventListener('click', stopPlayback);
+
+            function stopPlayback() {
+                timelineState.isPlaying = false;
+                timelineState.currentPlayingIndex = -1;
+
+                // Clear all scheduled timeouts
+                timelineState.playbackTimeouts.forEach(t => clearTimeout(t));
+                timelineState.playbackTimeouts = [];
+
+                if (currentAudio) {
+                    currentAudio.pause();
+                    currentAudio = null;
+                }
+
+                renderTrack();
+                playAllBtn.disabled = timelineState.segments.length === 0;
+                stopBtn.disabled = true;
+            }
+
+            // Edit Modal
+            function openEditModal(index) {
+                currentEditIndex = index;
+                const seg = timelineState.segments[index];
+                if (!seg) return;
+
+                editSegmentIndex.textContent = index + 1;
+                editText.value = seg.text;
+                editDuration.value = '';
+                editOffset.value = seg.start_offset_ms;
+                editModal.classList.add('show');
+            }
+
+            function closeEditModal() {
+                editModal.classList.remove('show');
+                currentEditIndex = -1;
+            }
+
+            modalClose.addEventListener('click', closeEditModal);
+            cancelEditBtn.addEventListener('click', closeEditModal);
+
+            editModal.addEventListener('click', (e) => {
+                if (e.target === editModal) closeEditModal();
+            });
+
+            // Save offset only
+            saveOffsetBtn.addEventListener('click', () => {
+                if (currentEditIndex < 0) return;
+                const newOffset = parseInt(editOffset.value) || 0;
+                timelineState.segments[currentEditIndex].start_offset_ms = Math.max(0, newOffset);
+                renderTimeline();
+                closeEditModal();
+            });
+
+            // Regenerate segment
+            regenerateBtn.addEventListener('click', async () => {
+                if (currentEditIndex < 0) return;
+
+                const text = editText.value.trim();
+                if (!text) {
+                    alert('请输入文本');
+                    return;
+                }
+
+                const durationValue = editDuration.value.trim();
+                const newOffset = parseInt(editOffset.value) || 0;
+
+                regenerateBtn.disabled = true;
+                regenerateBtn.textContent = '生成中...';
+
+                const formData = new FormData();
+                formData.append('text', text);
+                if (durationValue) {
+                    formData.append('duration_seconds', parseFloat(durationValue));
+                }
+
+                try {
+                    const response = await fetch(`${apiBaseUrl}/text-to-speech/`, {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok && data.segments && data.segments.length > 0) {
+                        // Use first segment from response
+                        const newSeg = data.segments[0];
+                        const blob = base64ToBlob(newSeg.audio, 'audio/mpeg');
+                        const audioUrl = URL.createObjectURL(blob);
+
+                        // Revoke old URL
+                        if (timelineState.segments[currentEditIndex].audioUrl) {
+                            URL.revokeObjectURL(timelineState.segments[currentEditIndex].audioUrl);
+                        }
+
+                        // Update segment
+                        timelineState.segments[currentEditIndex] = {
+                            ...timelineState.segments[currentEditIndex],
+                            text: newSeg.text,
+                            audio: newSeg.audio,
+                            duration_ms: newSeg.duration_ms,
+                            start_offset_ms: Math.max(0, newOffset),
+                            audioBlob: blob,
+                            audioUrl: audioUrl
+                        };
+
+                        renderTimeline();
+                        closeEditModal();
+                        showStatus('片段已重新生成', 'success');
+                    } else {
+                        alert('生成失败: ' + (data.error || '未知错误'));
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    alert('请求失败: ' + error.message);
+                } finally {
+                    regenerateBtn.disabled = false;
+                    regenerateBtn.textContent = '重新生成';
+                }
+            });
+
+            // Delete segment
+            function deleteSegment(index) {
+                if (!confirm('确定删除这个片段吗？')) return;
+
+                // Revoke URL
+                if (timelineState.segments[index].audioUrl) {
+                    URL.revokeObjectURL(timelineState.segments[index].audioUrl);
+                }
+
+                timelineState.segments.splice(index, 1);
+
+                // Update IDs
+                timelineState.segments.forEach((seg, i) => {
+                    seg.id = i;
+                });
+
+                renderTimeline();
+            }
+
+            // Download merged audio
+            downloadBtn.addEventListener('click', async () => {
+                if (timelineState.segments.length === 0) return;
+
+                downloadBtn.disabled = true;
+                downloadBtn.textContent = '合并中...';
+
+                // Prepare segments data for API
+                const segmentsData = timelineState.segments.map(seg => ({
+                    audio: seg.audio,
+                    start_offset_ms: seg.start_offset_ms,
+                    duration_ms: seg.duration_ms
+                }));
+
+                try {
+                    const response = await fetch(`${apiBaseUrl}/merge-audio/`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ segments: segmentsData })
+                    });
+
+                    if (response.ok) {
+                        const blob = await response.blob();
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'merged_audio.mp3';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                        showStatus('下载完成', 'success');
+                    } else {
+                        const data = await response.json();
+                        showStatus('合并失败: ' + (data.error || '未知错误'), 'error');
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    showStatus('下载失败: ' + error.message, 'error');
+                } finally {
+                    downloadBtn.disabled = false;
+                    downloadBtn.textContent = '下载合并音频';
+                }
+            });
+        </script>
+    </body>
+</html>
