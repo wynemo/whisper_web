@@ -64,14 +64,22 @@
         <!-- WebSocket 操作 -->
         <button id="connectBtn">Connect</button>
         <button id="disconnectBtn" disabled>Disconnect</button>
-        <button id="cleanTextBtn">显示纯文本</button>
 
         <div id="output"></div>
 
-        <!-- 纯文本显示区域 -->
-        <div id="cleanOutput" style="display: none;">
-            <h3>纯文本字幕 <button id="copyCleanBtn">复制</button> <button id="hideCleanBtn">隐藏</button></h3>
-            <div id="cleanText" style="white-space: pre-wrap; background: #fff; color: #333; padding: 10px; border-radius: 5px; border: 1px solid #ccc; max-height: 300px; overflow-y: auto;"></div>
+        <!-- 下载按钮区域 -->
+        <div id="downloadSection" style="margin-top: 15px; display: none;">
+            <h3>下载字幕</h3>
+            <button id="downloadSrtBtn">下载 SRT 字幕</button>
+            <button id="downloadTxtBtn">下载纯文本</button>
+            <button id="copySrtBtn">复制 SRT</button>
+            <button id="copyTxtBtn">复制纯文本</button>
+        </div>
+
+        <!-- SRT字幕预览区域 -->
+        <div id="srtPreview" style="margin-top: 15px; display: none;">
+            <h3>SRT 字幕预览 <button id="hideSrtBtn">隐藏</button></h3>
+            <div id="srtText" style="white-space: pre-wrap; background: #fff; color: #333; padding: 10px; border-radius: 5px; border: 1px solid #ccc; max-height: 300px; overflow-y: auto; font-family: monospace;"></div>
         </div>
 
         <script>
@@ -83,12 +91,71 @@
             const fileSelector = document.getElementById("fileSelector");
             const fileInput = document.getElementById("fileInput");
             const uploadBtn = document.getElementById("uploadBtn");
+            const downloadSection = document.getElementById("downloadSection");
+            const downloadSrtBtn = document.getElementById("downloadSrtBtn");
+            const downloadTxtBtn = document.getElementById("downloadTxtBtn");
+            const copySrtBtn = document.getElementById("copySrtBtn");
+            const copyTxtBtn = document.getElementById("copyTxtBtn");
+            const srtPreview = document.getElementById("srtPreview");
+            const srtText = document.getElementById("srtText");
+            const hideSrtBtn = document.getElementById("hideSrtBtn");
+
+            // 存储字幕数据
+            let subtitleSegments = [];
+
+            // 解析时间戳格式 [00:00:00,000 --> 00:00:05,000] 文本
+            function parseSubtitleLine(line) {
+                const match = line.match(/^\[(\d{2}:\d{2}:\d{2}[,\.]\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}[,\.]\d{3})\]\s*(.+)$/);
+                if (match) {
+                    return {
+                        start: match[1].replace('.', ','),
+                        end: match[2].replace('.', ','),
+                        text: match[3]
+                    };
+                }
+                return null;
+            }
+
+            // 生成标准SRT格式字幕
+            function generateSrt() {
+                let srt = '';
+                subtitleSegments.forEach((seg, index) => {
+                    srt += `${index + 1}\n`;
+                    srt += `${seg.start} --> ${seg.end}\n`;
+                    srt += `${seg.text}\n\n`;
+                });
+                return srt.trim();
+            }
+
+            // 生成纯文本字幕
+            function generatePlainText() {
+                return subtitleSegments.map(seg => seg.text).join('\n');
+            }
+
+            // 下载文件
+            function downloadFile(content, filename, mimeType) {
+                const blob = new Blob([content], { type: mimeType });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }
 
             function appendMessage(message) {
                 const line = document.createElement("div");
                 line.textContent = message;
                 outputDiv.appendChild(line);
                 outputDiv.scrollTop = outputDiv.scrollHeight; // 自动滚动到底部
+
+                // 尝试解析字幕行
+                const segment = parseSubtitleLine(message);
+                if (segment) {
+                    subtitleSegments.push(segment);
+                }
             }
 
             async function loadFiles() {
@@ -120,6 +187,12 @@
                     return;
                 }
 
+                // 清空之前的数据
+                subtitleSegments = [];
+                outputDiv.innerHTML = '';
+                downloadSection.style.display = 'none';
+                srtPreview.style.display = 'none';
+
                 if (!websocket || websocket.readyState !== WebSocket.OPEN) {
                     websocket = new WebSocket(
                         `${apiBaseUrl.replace("http", "ws")}/ws`,
@@ -136,12 +209,27 @@
 
                     websocket.onmessage = (event) => {
                         appendMessage(event.data);
+                        // 检测转录完成
+                        if (event.data.includes("转录完成") || event.data.includes("SRT 文件已保存")) {
+                            if (subtitleSegments.length > 0) {
+                                downloadSection.style.display = 'block';
+                                // 显示SRT预览
+                                srtText.textContent = generateSrt();
+                                srtPreview.style.display = 'block';
+                            }
+                        }
                     };
 
                     websocket.onclose = () => {
                         appendMessage("[WebSocket disconnected]");
                         connectBtn.disabled = false;
                         disconnectBtn.disabled = true;
+                        // 转录完成后显示下载按钮
+                        if (subtitleSegments.length > 0) {
+                            downloadSection.style.display = 'block';
+                            srtText.textContent = generateSrt();
+                            srtPreview.style.display = 'block';
+                        }
                     };
 
                     websocket.onerror = (error) => {
@@ -187,32 +275,39 @@
                 }
             });
 
-            // 显示纯文本按钮
-            const cleanTextBtn = document.getElementById("cleanTextBtn");
-            const cleanOutput = document.getElementById("cleanOutput");
-            const cleanText = document.getElementById("cleanText");
-            const copyCleanBtn = document.getElementById("copyCleanBtn");
-            const hideCleanBtn = document.getElementById("hideCleanBtn");
-
-            cleanTextBtn.addEventListener("click", () => {
-                // 获取 output 中的所有文本
-                const lines = outputDiv.innerText.split("\n");
-                // 去掉时间戳 [xx:xx.xxx --> xx:xx.xxx] 格式
-                const cleanedLines = lines
-                    .map(line => line.replace(/\[.*?\]/g, "").trim())
-                    .filter(line => line.length > 0);
-                cleanText.textContent = cleanedLines.join("\n");
-                cleanOutput.style.display = "block";
+            // 下载SRT按钮
+            downloadSrtBtn.addEventListener("click", () => {
+                const srtContent = generateSrt();
+                const filename = fileSelector.value ? fileSelector.value.replace(/\.[^/.]+$/, '.srt') : 'subtitles.srt';
+                downloadFile(srtContent, filename, 'text/plain; charset=utf-8');
             });
 
-            copyCleanBtn.addEventListener("click", () => {
-                navigator.clipboard.writeText(cleanText.textContent).then(() => {
-                    alert("已复制到剪贴板");
+            // 下载纯文本按钮
+            downloadTxtBtn.addEventListener("click", () => {
+                const txtContent = generatePlainText();
+                const filename = fileSelector.value ? fileSelector.value.replace(/\.[^/.]+$/, '.txt') : 'subtitles.txt';
+                downloadFile(txtContent, filename, 'text/plain; charset=utf-8');
+            });
+
+            // 复制SRT按钮
+            copySrtBtn.addEventListener("click", () => {
+                const srtContent = generateSrt();
+                navigator.clipboard.writeText(srtContent).then(() => {
+                    alert("SRT 字幕已复制到剪贴板");
                 });
             });
 
-            hideCleanBtn.addEventListener("click", () => {
-                cleanOutput.style.display = "none";
+            // 复制纯文本按钮
+            copyTxtBtn.addEventListener("click", () => {
+                const txtContent = generatePlainText();
+                navigator.clipboard.writeText(txtContent).then(() => {
+                    alert("纯文本已复制到剪贴板");
+                });
+            });
+
+            // 隐藏预览按钮
+            hideSrtBtn.addEventListener("click", () => {
+                srtPreview.style.display = "none";
             });
 
             // 初始化文件列表
