@@ -1,9 +1,11 @@
 import argparse
 import base64
 import io
+import json
 import re
 from typing import List, Optional
 
+import httpx
 from pydantic import BaseModel
 
 from pydub import AudioSegment
@@ -506,6 +508,101 @@ async def generate_srt(request: GenerateSrtRequest):
         media_type="text/plain; charset=utf-8",
         headers={"Content-Disposition": "attachment; filename=timeline.srt"},
     )
+
+
+class CorrectSubtitlesRequest(BaseModel):
+    srt_content: str
+    reference_text: str
+    api_base_url: str = ""
+    api_key: str = ""
+    model: str = ""
+
+
+@app.post("/correct-subtitles/")
+async def correct_subtitles(request: CorrectSubtitlesRequest):
+    """
+    使用 LLM 纠正 ASR 生成的字幕
+
+    1. 接收 SRT 字幕内容和参考文本
+    2. 发送给 OpenAI 兼容的大模型 API
+    3. 返回纠正后的 SRT 字幕
+    """
+    # 优先使用请求中的配置，否则回退到环境变量配置
+    api_base_url = request.api_base_url or settings.LLM_API_BASE_URL
+    api_key = request.api_key or settings.LLM_API_KEY
+    model = request.model or settings.LLM_MODEL
+
+    if not api_base_url or not api_key or not model:
+        return {"error": "请配置 LLM API 地址、API Key 和模型名称"}
+
+    # 构建 prompt
+    system_prompt = (
+        "你是一个专业的字幕校对助手。你的任务是根据参考文本纠正 ASR（语音识别）生成的 SRT 字幕。\n"
+        "规则：\n"
+        "1. 保持 SRT 格式不变（序号、时间轴、空行分隔）\n"
+        "2. 只修正文字内容，不要改动时间轴\n"
+        "3. 根据参考文本修正错别字、漏字、多字等识别错误\n"
+        "4. 如果某段字幕在参考文本中找不到对应内容，保持原样\n"
+        "5. 只输出纠正后的完整 SRT 内容，不要输出任何解释说明"
+    )
+
+    user_prompt = (
+        f"以下是 ASR 生成的 SRT 字幕：\n\n{request.srt_content}\n\n"
+        f"以下是参考文本：\n\n{request.reference_text}\n\n"
+        "请根据参考文本纠正字幕中的识别错误，只输出纠正后的完整 SRT 内容。"
+    )
+
+    # 调用 OpenAI 兼容 API
+    # 确保 base_url 以 /v1 结尾
+    base_url = api_base_url.rstrip("/")
+    if not base_url.endswith("/v1"):
+        base_url = base_url + "/v1"
+    url = f"{base_url}/chat/completions"
+
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}",
+    }
+
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        "temperature": 0.3,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            response = await client.post(url, headers=headers, json=payload)
+            response.raise_for_status()
+
+        result = response.json()
+        corrected_srt = result["choices"][0]["message"]["content"].strip()
+
+        # 去除可能的 markdown 代码块标记
+        if corrected_srt.startswith("```"):
+            lines = corrected_srt.split("\n")
+            # 去掉首行 ``` 和末行 ```
+            if lines[-1].strip() == "```":
+                lines = lines[1:-1]
+            else:
+                lines = lines[1:]
+            corrected_srt = "\n".join(lines).strip()
+
+        return {"corrected_srt": corrected_srt}
+
+    except httpx.HTTPStatusError as e:
+        error_detail = e.response.text if e.response else str(e)
+        logger.error(f"LLM API 请求失败: {e.response.status_code} - {error_detail}")
+        return {"error": f"LLM API 请求失败: {e.response.status_code} - {error_detail}"}
+    except httpx.RequestError as e:
+        logger.error(f"LLM API 连接失败: {e}")
+        return {"error": f"LLM API 连接失败: {str(e)}"}
+    except (KeyError, IndexError, json.JSONDecodeError) as e:
+        logger.error(f"LLM API 响应解析失败: {e}")
+        return {"error": f"LLM API 响应解析失败: {str(e)}"}
 
 
 # uv run uvicorn main:app 开发模式
