@@ -22,5 +22,10 @@ class Settings(BaseSettings):
     DOUBAO_RESOURCE_ID: str = "volc.megatts.default"
     DOUBAO_DEFAULT_VOICE_TYPE: str = "zh_female_vv_uranus_bigtts"
 
+    # LLM 配置 (OpenAI 兼容 API)
+    LLM_API_BASE_URL: str = ""
+    LLM_API_KEY: str = ""
+    LLM_MODEL: str = ""
+
 
 settings = Settings()
