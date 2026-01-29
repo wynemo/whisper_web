@@ -138,12 +138,6 @@
             <button id="copyTxtBtn">复制纯文本</button>
         </div>
 
-        <!-- SRT字幕预览区域 -->
-        <div id="srtPreview" style="margin-top: 15px; display: none;">
-            <h3>SRT 字幕预览 <button id="hideSrtBtn">隐藏</button></h3>
-            <div id="srtText" style="white-space: pre-wrap; background: #fff; color: #333; padding: 10px; border-radius: 5px; border: 1px solid #ccc; max-height: 300px; overflow-y: auto; font-family: monospace;"></div>
-        </div>
-
         <!-- 字幕纠错区域 -->
         <div id="correctionSection" class="correction-section" style="display: none;">
             <h3>字幕纠错 (LLM)</h3>
@@ -178,6 +172,12 @@
                 <h4>纠正后的字幕 <button id="hideCorrectedBtn" style="font-size: 12px; padding: 3px 8px;">隐藏</button></h4>
                 <div id="correctedSrtText" style="white-space: pre-wrap; background: #f0fff0; color: #333; padding: 10px; border-radius: 5px; border: 1px solid #c3e6cb; max-height: 300px; overflow-y: auto; font-family: monospace;"></div>
             </div>
+        </div>
+
+        <!-- SRT字幕预览区域 -->
+        <div id="srtPreview" style="margin-top: 15px; display: none;">
+            <h3>SRT 字幕预览 <button id="hideSrtBtn">隐藏</button></h3>
+            <div id="srtText" style="white-space: pre-wrap; background: #fff; color: #333; padding: 10px; border-radius: 5px; border: 1px solid #ccc; max-height: 300px; overflow-y: auto; font-family: monospace;"></div>
         </div>
 
         <script>
