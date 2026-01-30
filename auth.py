@@ -1,10 +1,10 @@
+import hashlib
 import os
 from datetime import datetime, timedelta
 from typing import Optional
 
 from fastapi import Depends, HTTPException, Request, status
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from sqlmodel import Session, select
 
 from config import settings
@@ -14,19 +14,17 @@ from models import User
 ALGORITHM = "HS256"
 COOKIE_NAME = "access_token"
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 
 def generate_salt() -> str:
     return os.urandom(16).hex()
 
 
 def hash_password(password: str, salt: str) -> str:
-    return pwd_context.hash(password + salt)
+    return hashlib.sha256((password + salt).encode()).hexdigest()
 
 
 def verify_password(plain_password: str, hashed_password: str, salt: str) -> bool:
-    return pwd_context.verify(plain_password + salt, hashed_password)
+    return hash_password(plain_password, salt) == hashed_password
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
