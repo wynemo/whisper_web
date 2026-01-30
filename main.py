@@ -171,12 +171,6 @@ async def startup_event():
 UPLOAD_DIR = "upload"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-# 挂载静态页面目录
-PAGES_DIR = os.path.join(os.path.dirname(__file__), "pages")
-try:
-    app.mount("/", StaticFilesCache(directory=PAGES_DIR, html=True), name="pages")
-except Exception as e:
-    logging.error(f"静态文件目录挂载失败：{e}")
 
 
 # ==================== 认证接口 ====================
@@ -697,6 +691,13 @@ async def correct_subtitles(request: CorrectSubtitlesRequest, _user: User = Depe
 
 
 # uv run uvicorn main:app 开发模式
+# 挂载静态页面目录（放在所有路由之后，作为 fallback）
+PAGES_DIR = os.path.join(os.path.dirname(__file__), "pages")
+try:
+    app.mount("/", StaticFilesCache(directory=PAGES_DIR, html=True), name="pages")
+except Exception as e:
+    logging.error(f"静态文件目录挂载失败：{e}")
+
 # uv run main.py --workers 2 部署模式
 if __name__ == "__main__":
     # 创建命令行参数解析器
