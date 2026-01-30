@@ -11,8 +11,7 @@ from pydantic import BaseModel
 from pydub import AudioSegment
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect
-from fastapi_toolbox import run_server
-from fastapi_toolbox.static_files import StaticFilesCache
+from fastapi_toolbox import run_server, NextJSRouteMiddleware, StaticFilesCache
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 from subprocess import Popen, PIPE, STDOUT
@@ -150,6 +149,14 @@ def split_sentences(text: str) -> list[str]:
     return [s.strip() for s in sentences if s.strip()]
 
 app = FastAPI()
+
+# 挂载静态页面
+PAGES_DIR = os.path.join(os.path.dirname(__file__), "pages")
+app.add_middleware(
+    NextJSRouteMiddleware,
+    static_dir=PAGES_DIR,
+    skip_prefixes=["/api", "/auth", "/ws", "/upload", "/files", "/docs", "/redoc", "/openapi.json"],
+)
 
 # 可选：允许跨域
 app.add_middleware(
