@@ -10,17 +10,28 @@ from pydantic import BaseModel
 
 from pydub import AudioSegment
 
-from fastapi import FastAPI, File, Form, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi_toolbox import run_server
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 from subprocess import Popen, PIPE, STDOUT
 import os
 import asyncio
 import logging
 import platform
+from sqlmodel import Session, select
 
 from config import settings
+from db import create_db_and_tables, get_session
+from models import User
+from auth import (
+    COOKIE_NAME,
+    create_access_token,
+    generate_salt,
+    get_current_user,
+    hash_password,
+    verify_password,
+)
 
 # faster-whisper 条件导入 (仅 Linux)
 _faster_whisper_available = False
@@ -148,6 +159,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.on_event("startup")
+async def startup_event():
+    try:
+        create_db_and_tables()
+    except Exception:
+        logger.exception("数据库初始化失败")
+
 # 创建保存文件的目录
 UPLOAD_DIR = "upload"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -173,8 +191,86 @@ async def serve_tts_timeline():
     """提供 TTS 时间轴编辑页面"""
     return FileResponse("tts_timeline.html")
 
+
+@app.get("/login")
+async def serve_login():
+    """提供登录页面"""
+    return FileResponse("login.html")
+
+
+# ==================== 认证接口 ====================
+
+
+class RegisterRequest(BaseModel):
+    username: str
+    password: str
+
+
+@app.post("/auth/register")
+async def register(request: RegisterRequest, session: Session = Depends(get_session)):
+    """用户注册"""
+    existing = session.exec(
+        select(User).where(User.username == request.username)
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="用户名已存在")
+
+    salt = generate_salt()
+    hashed = hash_password(request.password, salt)
+    user = User(
+        username=request.username,
+        hashed_password=hashed,
+        salt=salt,
+    )
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+
+    return {"id": user.id, "username": user.username}
+
+
+@app.post("/auth/login")
+async def login(
+    username: str = Form(...),
+    password: str = Form(...),
+    session: Session = Depends(get_session),
+):
+    """用户登录（OAuth2 表单格式），返回 httponly cookie"""
+    user = session.exec(select(User).where(User.username == username)).first()
+    if not user or not verify_password(password, user.hashed_password, user.salt):
+        raise HTTPException(status_code=401, detail="用户名或密码错误")
+
+    token = create_access_token(data={"sub": user.username})
+    response = JSONResponse(content={"message": "登录成功", "username": user.username, "token": token})
+    response.set_cookie(
+        key=COOKIE_NAME,
+        value=token,
+        httponly=True,
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        samesite="lax",
+    )
+    return response
+
+
+@app.post("/auth/logout")
+async def logout():
+    """用户登出，清除 httponly cookie"""
+    response = JSONResponse(content={"message": "已登出"})
+    response.delete_cookie(key=COOKIE_NAME)
+    return response
+
+
+@app.get("/auth/me")
+async def get_me(user: User = Depends(get_current_user)):
+    """获取当前登录用户信息"""
+    return {"id": user.id, "username": user.username}
+
+
+# ==================== 受保护的接口 ====================
+
+
 @app.post("/upload/")
-async def upload_file(file: UploadFile = File(...)):
+async def upload_file(file: UploadFile = File(...), _user: User = Depends(get_current_user)):
     """保存上传的文件到指定目录"""
     file_path = os.path.join(UPLOAD_DIR, file.filename)
     with open(file_path, "wb") as f:
@@ -183,13 +279,26 @@ async def upload_file(file: UploadFile = File(...)):
     return {"filename": file.filename, "filepath": file_path}
 
 @app.get("/files/")
-async def list_files():
+async def list_files(_user: User = Depends(get_current_user)):
     """获取 upload 目录下的文件列表"""
     files = os.listdir(UPLOAD_DIR)
     return {"files": files}
 
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
+async def websocket_endpoint(websocket: WebSocket, token: str = Query(...)):
+    # WebSocket 认证：从 query parameter 验证 token
+    from jose import JWTError, jwt as jose_jwt
+    from auth import ALGORITHM
+    try:
+        payload = jose_jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
+        username = payload.get("sub")
+        if username is None:
+            await websocket.close(code=4001, reason="无效的认证凭据")
+            return
+    except JWTError:
+        await websocket.close(code=4001, reason="无效的认证凭据")
+        return
+
     await websocket.accept()
     process = None
 
@@ -242,7 +351,7 @@ async def websocket_endpoint(websocket: WebSocket):
         await websocket.close()
 
 @app.post("/srt-to-speech/")
-async def srt_to_speech(file: UploadFile = File(...)):
+async def srt_to_speech(file: UploadFile = File(...), _user: User = Depends(get_current_user)):
     """
     将 SRT 字幕转换为语音
 
@@ -312,6 +421,7 @@ async def srt_to_speech(file: UploadFile = File(...)):
 async def text_to_speech_api(
     text: str = Form(...),
     duration_seconds: Optional[float] = Form(None),
+    _user: User = Depends(get_current_user),
 ):
     """
     将纯文本转换为语音
@@ -416,7 +526,7 @@ class GenerateSrtRequest(BaseModel):
 
 
 @app.post("/merge-audio/")
-async def merge_audio(request: MergeRequest):
+async def merge_audio(request: MergeRequest, _user: User = Depends(get_current_user)):
     """
     合并多个音频片段，按时间轴位置排列
 
@@ -474,7 +584,7 @@ async def merge_audio(request: MergeRequest):
 
 
 @app.post("/generate-srt/")
-async def generate_srt(request: GenerateSrtRequest):
+async def generate_srt(request: GenerateSrtRequest, _user: User = Depends(get_current_user)):
     """
     根据时间轴片段生成 SRT 字幕文件
 
@@ -519,7 +629,7 @@ class CorrectSubtitlesRequest(BaseModel):
 
 
 @app.post("/correct-subtitles/")
-async def correct_subtitles(request: CorrectSubtitlesRequest):
+async def correct_subtitles(request: CorrectSubtitlesRequest, _user: User = Depends(get_current_user)):
     """
     使用 LLM 纠正 ASR 生成的字幕
 

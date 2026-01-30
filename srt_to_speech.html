@@ -87,17 +87,6 @@
                 background-color: #f8d7da;
                 color: #721c24;
             }
-            .back-link {
-                margin-top: 20px;
-                display: block;
-            }
-            .back-link a {
-                color: #0078d7;
-                text-decoration: none;
-            }
-            .back-link a:hover {
-                text-decoration: underline;
-            }
             audio {
                 width: 100%;
                 margin-top: 15px;
@@ -105,6 +94,14 @@
         </style>
     </head>
     <body>
+        <nav style="margin-bottom: 20px; display: flex; align-items: center;">
+            <a href="/" style="margin-right: 15px; color: #0078d7; text-decoration: none; font-weight: bold;">首页</a>
+            <a href="/srt-to-speech" style="margin-right: 15px; color: #0078d7; text-decoration: none;">SRT to Speech</a>
+            <a href="/tts-timeline" style="margin-right: 15px; color: #0078d7; text-decoration: none;">TTS 时间轴</a>
+            <span style="margin-left: auto;" id="authArea">
+                <a href="/login" style="color: #0078d7; text-decoration: none;">登录</a>
+            </span>
+        </nav>
         <h1>SRT 字幕转语音</h1>
         <p>上传 SRT 字幕文件，自动生成对应的语音文件 (MP3)</p>
 
@@ -125,12 +122,29 @@
             <p><a id="downloadLink" href="#" download>下载 MP3 文件</a></p>
         </div>
 
-        <div class="back-link">
-            <a href="/">返回首页</a>
-        </div>
-
         <script>
             const apiBaseUrl = window.location.origin;
+
+            // 登录状态检测
+            (async function checkAuth() {
+                const authArea = document.getElementById('authArea');
+                try {
+                    const resp = await fetch(`${apiBaseUrl}/auth/me`);
+                    if (resp.ok) {
+                        const user = await resp.json();
+                        authArea.innerHTML =
+                            `<span style="color: #333; margin-right: 10px;">${user.username}</span>` +
+                            `<a href="#" id="logoutBtn" style="color: #d9534f; text-decoration: none;">登出</a>`;
+                        document.getElementById('logoutBtn').addEventListener('click', async (e) => {
+                            e.preventDefault();
+                            await fetch(`${apiBaseUrl}/auth/logout`, { method: 'POST' });
+                            sessionStorage.removeItem('auth_token');
+                            window.location.reload();
+                        });
+                    }
+                } catch (_) {}
+            })();
+
             const srtFileInput = document.getElementById("srtFile");
             const uploadArea = document.getElementById("uploadArea");
             const fileNameDiv = document.getElementById("fileName");

@@ -105,10 +105,13 @@
         </style>
     </head>
     <body>
-        <nav style="margin-bottom: 20px;">
+        <nav style="margin-bottom: 20px; display: flex; align-items: center;">
             <a href="/" style="margin-right: 15px; color: #0078d7; text-decoration: none; font-weight: bold;">首页</a>
             <a href="srt-to-speech" style="margin-right: 15px; color: #0078d7; text-decoration: none;">SRT to Speech</a>
-            <a href="tts-timeline" style="color: #0078d7; text-decoration: none;">TTS 时间轴</a>
+            <a href="tts-timeline" style="margin-right: 15px; color: #0078d7; text-decoration: none;">TTS 时间轴</a>
+            <span style="margin-left: auto;" id="authArea">
+                <a href="/login" style="color: #0078d7; text-decoration: none;">登录</a>
+            </span>
         </nav>
         <h1>File Upload, Selector, and WebSocket Viewer</h1>
 
@@ -182,6 +185,27 @@
 
         <script>
             const apiBaseUrl = window.location.origin; // 动态获取当前服务器的主机和端口
+
+            // 登录状态检测
+            (async function checkAuth() {
+                const authArea = document.getElementById('authArea');
+                try {
+                    const resp = await fetch(`${apiBaseUrl}/auth/me`);
+                    if (resp.ok) {
+                        const user = await resp.json();
+                        authArea.innerHTML =
+                            `<span style="color: #333; margin-right: 10px;">${user.username}</span>` +
+                            `<a href="#" id="logoutBtn" style="color: #d9534f; text-decoration: none;">登出</a>`;
+                        document.getElementById('logoutBtn').addEventListener('click', async (e) => {
+                            e.preventDefault();
+                            await fetch(`${apiBaseUrl}/auth/logout`, { method: 'POST' });
+                            sessionStorage.removeItem('auth_token');
+                            window.location.reload();
+                        });
+                    }
+                } catch (_) {}
+            })();
+
             let websocket = null;
             const outputDiv = document.getElementById("output");
             const connectBtn = document.getElementById("connectBtn");
@@ -295,8 +319,9 @@
                 correctedSrtContent = "";
 
                 if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+                    const wsToken = sessionStorage.getItem('auth_token') || '';
                     websocket = new WebSocket(
-                        `${apiBaseUrl.replace("http", "ws")}/ws`,
+                        `${apiBaseUrl.replace("http", "ws")}/ws?token=${encodeURIComponent(wsToken)}`,
                     );
 
                     websocket.onopen = () => {

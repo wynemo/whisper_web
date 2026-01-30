@@ -1,3 +1,5 @@
+import secrets
+
 from pydantic_settings import BaseSettings
 from typing import Literal
 
@@ -5,6 +7,10 @@ from typing import Literal
 class Settings(BaseSettings):
     # CUDA 配置
     USE_CUDA: bool = False
+
+    # JWT 认证配置
+    SECRET_KEY: str = secrets.token_urlsafe(32)
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440  # 24 小时
 
     # Whisper 引擎选择: "openai" (原版) 或 "faster" (faster-whisper, 仅 Linux)
     WHISPER_ENGINE: Literal["openai", "faster"] = "openai"
@@ -26,6 +32,9 @@ class Settings(BaseSettings):
     LLM_API_BASE_URL: str = ""
     LLM_API_KEY: str = ""
     LLM_MODEL: str = ""
+
+    # 数据库配置
+    DATABASE_URL: str = "sqlite:///data.db"
 
 
 settings = Settings()

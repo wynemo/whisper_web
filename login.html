@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="zh-CN">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>登录</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                background-color: #f4f4f9;
+                margin: 0;
+                padding: 20px;
+            }
+            nav {
+                margin-bottom: 20px;
+                display: flex;
+                align-items: center;
+            }
+            nav a {
+                margin-right: 15px;
+                color: #0078d7;
+                text-decoration: none;
+                font-weight: bold;
+            }
+            nav a:hover {
+                text-decoration: underline;
+            }
+            .login-container {
+                max-width: 400px;
+                margin: 60px auto;
+                background: #fff;
+                border: 1px solid #ddd;
+                border-radius: 8px;
+                overflow: hidden;
+            }
+            .tabs {
+                display: flex;
+                border-bottom: 1px solid #ddd;
+            }
+            .tab {
+                flex: 1;
+                padding: 14px;
+                text-align: center;
+                cursor: pointer;
+                background: #f8f9fa;
+                border: none;
+                font-size: 15px;
+                color: #555;
+                transition: background 0.2s;
+            }
+            .tab:hover {
+                background: #e9ecef;
+            }
+            .tab.active {
+                background: #fff;
+                color: #0078d7;
+                font-weight: bold;
+                border-bottom: 2px solid #0078d7;
+            }
+            .form-panel {
+                display: none;
+                padding: 24px;
+            }
+            .form-panel.active {
+                display: block;
+            }
+            .form-group {
+                margin-bottom: 16px;
+            }
+            .form-group label {
+                display: block;
+                margin-bottom: 6px;
+                font-size: 14px;
+                color: #333;
+            }
+            .form-group input {
+                width: 100%;
+                padding: 10px;
+                border: 1px solid #ccc;
+                border-radius: 5px;
+                font-size: 14px;
+                box-sizing: border-box;
+            }
+            .form-group input:focus {
+                outline: none;
+                border-color: #0078d7;
+            }
+            button.submit-btn {
+                width: 100%;
+                padding: 12px;
+                border: none;
+                background-color: #0078d7;
+                color: white;
+                border-radius: 5px;
+                cursor: pointer;
+                font-size: 15px;
+            }
+            button.submit-btn:hover {
+                background-color: #005a9e;
+            }
+            button.submit-btn:disabled {
+                background-color: #ccc;
+                cursor: not-allowed;
+            }
+            .message {
+                padding: 10px 12px;
+                border-radius: 5px;
+                margin-bottom: 12px;
+                font-size: 14px;
+                display: none;
+            }
+            .message.error {
+                display: block;
+                background: #f8d7da;
+                color: #721c24;
+            }
+            .message.success {
+                display: block;
+                background: #d4edda;
+                color: #155724;
+            }
+        </style>
+    </head>
+    <body>
+        <nav>
+            <a href="/">首页</a>
+            <a href="/srt-to-speech">SRT to Speech</a>
+            <a href="/tts-timeline">TTS 时间轴</a>
+        </nav>
+
+        <div class="login-container">
+            <div class="tabs">
+                <button class="tab active" id="loginTab">登录</button>
+                <button class="tab" id="registerTab">注册</button>
+            </div>
+
+            <!-- 登录表单 -->
+            <div class="form-panel active" id="loginPanel">
+                <div class="message" id="loginMsg"></div>
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label for="loginUsername">用户名</label>
+                        <input type="text" id="loginUsername" required autocomplete="username" />
+                    </div>
+                    <div class="form-group">
+                        <label for="loginPassword">密码</label>
+                        <input type="password" id="loginPassword" required autocomplete="current-password" />
+                    </div>
+                    <button type="submit" class="submit-btn" id="loginBtn">登录</button>
+                </form>
+            </div>
+
+            <!-- 注册表单 -->
+            <div class="form-panel" id="registerPanel">
+                <div class="message" id="registerMsg"></div>
+                <form id="registerForm">
+                    <div class="form-group">
+                        <label for="regUsername">用户名</label>
+                        <input type="text" id="regUsername" required autocomplete="username" />
+                    </div>
+                    <div class="form-group">
+                        <label for="regPassword">密码</label>
+                        <input type="password" id="regPassword" required autocomplete="new-password" />
+                    </div>
+                    <button type="submit" class="submit-btn" id="registerBtn">注册</button>
+                </form>
+            </div>
+        </div>
+
+        <script>
+            const apiBaseUrl = window.location.origin;
+
+            const loginTab = document.getElementById('loginTab');
+            const registerTab = document.getElementById('registerTab');
+            const loginPanel = document.getElementById('loginPanel');
+            const registerPanel = document.getElementById('registerPanel');
+            const loginForm = document.getElementById('loginForm');
+            const registerForm = document.getElementById('registerForm');
+            const loginMsg = document.getElementById('loginMsg');
+            const registerMsg = document.getElementById('registerMsg');
+
+            function switchTab(tab) {
+                if (tab === 'login') {
+                    loginTab.classList.add('active');
+                    registerTab.classList.remove('active');
+                    loginPanel.classList.add('active');
+                    registerPanel.classList.remove('active');
+                } else {
+                    registerTab.classList.add('active');
+                    loginTab.classList.remove('active');
+                    registerPanel.classList.add('active');
+                    loginPanel.classList.remove('active');
+                }
+            }
+
+            loginTab.addEventListener('click', () => switchTab('login'));
+            registerTab.addEventListener('click', () => switchTab('register'));
+
+            function showMsg(el, type, text) {
+                el.className = 'message ' + type;
+                el.textContent = text;
+            }
+
+            function hideMsg(el) {
+                el.className = 'message';
+            }
+
+            // 登录
+            loginForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                hideMsg(loginMsg);
+                const username = document.getElementById('loginUsername').value.trim();
+                const password = document.getElementById('loginPassword').value;
+
+                if (!username || !password) {
+                    showMsg(loginMsg, 'error', '请输入用户名和密码');
+                    return;
+                }
+
+                const loginBtn = document.getElementById('loginBtn');
+                loginBtn.disabled = true;
+
+                try {
+                    const formData = new URLSearchParams();
+                    formData.append('username', username);
+                    formData.append('password', password);
+
+                    const response = await fetch(`${apiBaseUrl}/auth/login`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: formData,
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        // 存储 token 到 sessionStorage 供 WebSocket 使用
+                        if (data.token) {
+                            sessionStorage.setItem('auth_token', data.token);
+                        }
+                        showMsg(loginMsg, 'success', '登录成功，正在跳转...');
+                        setTimeout(() => {
+                            window.location.href = '/';
+                        }, 500);
+                    } else {
+                        showMsg(loginMsg, 'error', data.detail || '登录失败');
+                    }
+                } catch (error) {
+                    showMsg(loginMsg, 'error', '请求失败: ' + error.message);
+                } finally {
+                    loginBtn.disabled = false;
+                }
+            });
+
+            // 注册
+            registerForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                hideMsg(registerMsg);
+                const username = document.getElementById('regUsername').value.trim();
+                const password = document.getElementById('regPassword').value;
+
+                if (!username || !password) {
+                    showMsg(registerMsg, 'error', '请输入用户名和密码');
+                    return;
+                }
+
+                const registerBtn = document.getElementById('registerBtn');
+                registerBtn.disabled = true;
+
+                try {
+                    const response = await fetch(`${apiBaseUrl}/auth/register`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username, password }),
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        showMsg(registerMsg, 'success', '注册成功，请切换到登录');
+                        // 自动切换到登录 tab
+                        setTimeout(() => {
+                            switchTab('login');
+                            document.getElementById('loginUsername').value = username;
+                            document.getElementById('loginPassword').focus();
+                        }, 1000);
+                    } else {
+                        showMsg(registerMsg, 'error', data.detail || '注册失败');
+                    }
+                } catch (error) {
+                    showMsg(registerMsg, 'error', '请求失败: ' + error.message);
+                } finally {
+                    registerBtn.disabled = false;
+                }
+            });
+        </script>
+    </body>
+</html>
