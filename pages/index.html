@@ -1,0 +1,576 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>File Upload, Selector, and WebSocket Viewer</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                background-color: #f4f4f9;
+                margin: 0;
+                padding: 20px;
+            }
+            #output {
+                white-space: pre-wrap;
+                background: #1e1e1e;
+                color: #dcdcdc;
+                padding: 10px;
+                border-radius: 5px;
+                overflow-y: auto;
+                height: 300px;
+                margin-bottom: 20px;
+            }
+            button {
+                margin: 5px 0;
+                padding: 10px 15px;
+                border: none;
+                background-color: #0078d7;
+                color: white;
+                border-radius: 5px;
+                cursor: pointer;
+            }
+            button:disabled {
+                background-color: #ccc;
+                cursor: not-allowed;
+            }
+            select,
+            input[type="file"] {
+                width: 100%;
+                padding: 10px;
+                margin-bottom: 10px;
+            }
+            textarea {
+                width: 100%;
+                padding: 10px;
+                margin-bottom: 10px;
+                border: 1px solid #ccc;
+                border-radius: 5px;
+                font-family: inherit;
+                font-size: 14px;
+                resize: vertical;
+                box-sizing: border-box;
+            }
+            .llm-config {
+                display: grid;
+                grid-template-columns: 1fr 1fr 1fr;
+                gap: 10px;
+                margin-bottom: 10px;
+            }
+            .llm-config input {
+                width: 100%;
+                padding: 8px;
+                border: 1px solid #ccc;
+                border-radius: 5px;
+                font-size: 14px;
+                box-sizing: border-box;
+            }
+            .llm-config label {
+                display: block;
+                margin-bottom: 4px;
+                font-size: 13px;
+                color: #555;
+            }
+            .correction-section {
+                background: #fff;
+                border: 1px solid #ddd;
+                border-radius: 8px;
+                padding: 20px;
+                margin-top: 20px;
+            }
+            .correction-section h3 {
+                margin-top: 0;
+            }
+            .correction-status {
+                padding: 8px 12px;
+                border-radius: 5px;
+                margin-bottom: 10px;
+                display: none;
+            }
+            .correction-status.loading {
+                display: block;
+                background: #fff3cd;
+                color: #856404;
+            }
+            .correction-status.error {
+                display: block;
+                background: #f8d7da;
+                color: #721c24;
+            }
+            .correction-status.success {
+                display: block;
+                background: #d4edda;
+                color: #155724;
+            }
+        </style>
+    </head>
+    <body>
+        <nav style="margin-bottom: 20px; display: flex; align-items: center;">
+            <a href="/" style="margin-right: 15px; color: #0078d7; text-decoration: none; font-weight: bold;">首页</a>
+            <a href="srt-to-speech" style="margin-right: 15px; color: #0078d7; text-decoration: none;">SRT to Speech</a>
+            <a href="tts-timeline" style="margin-right: 15px; color: #0078d7; text-decoration: none;">TTS 时间轴</a>
+            <span style="margin-left: auto;" id="authArea">
+                <a href="/login" style="color: #0078d7; text-decoration: none;">登录</a>
+            </span>
+        </nav>
+        <h1>File Upload, Selector, and WebSocket Viewer</h1>
+
+        <!-- 文件上传 -->
+        <h2>Upload a File</h2>
+        <input type="file" id="fileInput" />
+        <button id="uploadBtn">Upload</button>
+
+        <!-- 文件列表 -->
+        <h2>Select a File to Process</h2>
+        <select id="fileSelector">
+            <option value="">Select a file...</option>
+        </select>
+
+        <!-- WebSocket 操作 -->
+        <button id="connectBtn">Connect</button>
+        <button id="disconnectBtn" disabled>Disconnect</button>
+
+        <div id="output"></div>
+
+        <!-- 下载按钮区域 -->
+        <div id="downloadSection" style="margin-top: 15px; display: none;">
+            <h3>下载字幕</h3>
+            <button id="downloadSrtBtn">下载 SRT 字幕</button>
+            <button id="downloadTxtBtn">下载纯文本</button>
+            <button id="copySrtBtn">复制 SRT</button>
+            <button id="copyTxtBtn">复制纯文本</button>
+        </div>
+
+        <!-- 字幕纠错区域 -->
+        <div id="correctionSection" class="correction-section" style="display: none;">
+            <h3>字幕纠错 (LLM)</h3>
+            <p style="color: #666; font-size: 13px; margin-bottom: 15px;">输入参考文本，使用大模型对比纠正 ASR 生成的字幕。支持 OpenAI 兼容的 API。</p>
+
+            <div class="llm-config">
+                <div>
+                    <label for="llmApiUrl">API 地址</label>
+                    <input type="text" id="llmApiUrl" placeholder="https://api.openai.com" />
+                </div>
+                <div>
+                    <label for="llmApiKey">API Key</label>
+                    <input type="password" id="llmApiKey" placeholder="sk-..." />
+                </div>
+                <div>
+                    <label for="llmModel">模型名称</label>
+                    <input type="text" id="llmModel" placeholder="gpt-4o" />
+                </div>
+            </div>
+
+            <label for="referenceText" style="display: block; margin-bottom: 4px; font-size: 13px; color: #555;">参考文本</label>
+            <textarea id="referenceText" rows="8" placeholder="粘贴参考文本（如原始讲稿、文章等），大模型将根据此文本纠正字幕中的识别错误..."></textarea>
+
+            <div id="correctionStatus" class="correction-status"></div>
+
+            <button id="correctBtn">开始纠错</button>
+            <button id="applyCorrectionBtn" style="display: none; background-color: #28a745;">应用纠正结果</button>
+            <button id="downloadCorrectedSrtBtn" style="display: none;">下载纠正后的 SRT</button>
+
+            <!-- 纠正结果预览 -->
+            <div id="correctedPreview" style="margin-top: 15px; display: none;">
+                <h4>纠正后的字幕 <button id="hideCorrectedBtn" style="font-size: 12px; padding: 3px 8px;">隐藏</button></h4>
+                <div id="correctedSrtText" style="white-space: pre-wrap; background: #f0fff0; color: #333; padding: 10px; border-radius: 5px; border: 1px solid #c3e6cb; max-height: 300px; overflow-y: auto; font-family: monospace;"></div>
+            </div>
+        </div>
+
+        <!-- SRT字幕预览区域 -->
+        <div id="srtPreview" style="margin-top: 15px; display: none;">
+            <h3>SRT 字幕预览 <button id="hideSrtBtn">隐藏</button></h3>
+            <div id="srtText" style="white-space: pre-wrap; background: #fff; color: #333; padding: 10px; border-radius: 5px; border: 1px solid #ccc; max-height: 300px; overflow-y: auto; font-family: monospace;"></div>
+        </div>
+
+        <script>
+            const apiBaseUrl = window.location.origin; // 动态获取当前服务器的主机和端口
+
+            // 登录状态检测
+            (async function checkAuth() {
+                const authArea = document.getElementById('authArea');
+                try {
+                    const resp = await fetch(`${apiBaseUrl}/auth/me`);
+                    if (resp.ok) {
+                        const user = await resp.json();
+                        authArea.innerHTML =
+                            `<span style="color: #333; margin-right: 10px;">${user.username}</span>` +
+                            `<a href="#" id="logoutBtn" style="color: #d9534f; text-decoration: none;">登出</a>`;
+                        document.getElementById('logoutBtn').addEventListener('click', async (e) => {
+                            e.preventDefault();
+                            await fetch(`${apiBaseUrl}/auth/logout`, { method: 'POST' });
+                            sessionStorage.removeItem('auth_token');
+                            window.location.reload();
+                        });
+                    }
+                } catch (_) {}
+            })();
+
+            let websocket = null;
+            const outputDiv = document.getElementById("output");
+            const connectBtn = document.getElementById("connectBtn");
+            const disconnectBtn = document.getElementById("disconnectBtn");
+            const fileSelector = document.getElementById("fileSelector");
+            const fileInput = document.getElementById("fileInput");
+            const uploadBtn = document.getElementById("uploadBtn");
+            const downloadSection = document.getElementById("downloadSection");
+            const downloadSrtBtn = document.getElementById("downloadSrtBtn");
+            const downloadTxtBtn = document.getElementById("downloadTxtBtn");
+            const copySrtBtn = document.getElementById("copySrtBtn");
+            const copyTxtBtn = document.getElementById("copyTxtBtn");
+            const srtPreview = document.getElementById("srtPreview");
+            const srtText = document.getElementById("srtText");
+            const hideSrtBtn = document.getElementById("hideSrtBtn");
+
+            // 存储字幕数据
+            let subtitleSegments = [];
+
+            // 解析时间戳格式 [00:00:00,000 --> 00:00:05,000] 文本
+            function parseSubtitleLine(line) {
+                const match = line.match(/^\[(\d{2}:\d{2}:\d{2}[,\.]\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}[,\.]\d{3})\]\s*(.+)$/);
+                if (match) {
+                    return {
+                        start: match[1].replace('.', ','),
+                        end: match[2].replace('.', ','),
+                        text: match[3]
+                    };
+                }
+                return null;
+            }
+
+            // 生成标准SRT格式字幕
+            function generateSrt() {
+                let srt = '';
+                subtitleSegments.forEach((seg, index) => {
+                    srt += `${index + 1}\n`;
+                    srt += `${seg.start} --> ${seg.end}\n`;
+                    srt += `${seg.text}\n\n`;
+                });
+                return srt.trim();
+            }
+
+            // 生成纯文本字幕
+            function generatePlainText() {
+                return subtitleSegments.map(seg => seg.text).join('\n');
+            }
+
+            // 下载文件
+            function downloadFile(content, filename, mimeType) {
+                const blob = new Blob([content], { type: mimeType });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }
+
+            function appendMessage(message) {
+                const line = document.createElement("div");
+                line.textContent = message;
+                outputDiv.appendChild(line);
+                outputDiv.scrollTop = outputDiv.scrollHeight; // 自动滚动到底部
+
+                // 尝试解析字幕行
+                const segment = parseSubtitleLine(message);
+                if (segment) {
+                    subtitleSegments.push(segment);
+                }
+            }
+
+            async function loadFiles() {
+                try {
+                    const response = await fetch(`${apiBaseUrl}/files/`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        const files = data.files;
+                        fileSelector.innerHTML =
+                            '<option value="">Select a file...</option>';
+                        files.forEach((file) => {
+                            const option = document.createElement("option");
+                            option.value = file;
+                            option.textContent = file;
+                            fileSelector.appendChild(option);
+                        });
+                    } else {
+                        console.error("Failed to load files.");
+                    }
+                } catch (error) {
+                    console.error("Error loading files:", error);
+                }
+            }
+
+            connectBtn.addEventListener("click", () => {
+                const selectedFile = fileSelector.value;
+                if (!selectedFile) {
+                    alert("Please select a file.");
+                    return;
+                }
+
+                // 清空之前的数据
+                subtitleSegments = [];
+                outputDiv.innerHTML = '';
+                downloadSection.style.display = 'none';
+                srtPreview.style.display = 'none';
+                correctionSection.style.display = 'none';
+                correctedPreview.style.display = 'none';
+                correctedSrtContent = "";
+
+                if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+                    const wsToken = sessionStorage.getItem('auth_token') || '';
+                    websocket = new WebSocket(
+                        `${apiBaseUrl.replace("http", "ws")}/ws?token=${encodeURIComponent(wsToken)}`,
+                    );
+
+                    websocket.onopen = () => {
+                        appendMessage(
+                            `[Connected to WebSocket with file: ${selectedFile}]`,
+                        );
+                        websocket.send(selectedFile); // 发送选中的文件名
+                        connectBtn.disabled = true;
+                        disconnectBtn.disabled = false;
+                    };
+
+                    websocket.onmessage = (event) => {
+                        appendMessage(event.data);
+                        // 检测转录完成
+                        if (event.data.includes("转录完成") || event.data.includes("SRT 文件已保存")) {
+                            if (subtitleSegments.length > 0) {
+                                downloadSection.style.display = 'block';
+                                correctionSection.style.display = 'block';
+                                // 显示SRT预览
+                                srtText.textContent = generateSrt();
+                                srtPreview.style.display = 'block';
+                            }
+                        }
+                    };
+
+                    websocket.onclose = () => {
+                        appendMessage("[WebSocket disconnected]");
+                        connectBtn.disabled = false;
+                        disconnectBtn.disabled = true;
+                        // 转录完成后显示下载按钮
+                        if (subtitleSegments.length > 0) {
+                            downloadSection.style.display = 'block';
+                            correctionSection.style.display = 'block';
+                            srtText.textContent = generateSrt();
+                            srtPreview.style.display = 'block';
+                        }
+                    };
+
+                    websocket.onerror = (error) => {
+                        appendMessage("[WebSocket error]");
+                        console.error("WebSocket error:", error);
+                    };
+                }
+            });
+
+            disconnectBtn.addEventListener("click", () => {
+                if (websocket) {
+                    websocket.close();
+                    websocket = null;
+                }
+            });
+
+            uploadBtn.addEventListener("click", async () => {
+                const file = fileInput.files[0];
+                if (!file) {
+                    alert("Please select a file to upload.");
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append("file", file);
+
+                try {
+                    const response = await fetch(`${apiBaseUrl}/upload/`, {
+                        method: "POST",
+                        body: formData,
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        appendMessage(`File uploaded: ${data.filename}`);
+                        await loadFiles(); // 上传成功后刷新文件列表
+                    } else {
+                        appendMessage("Failed to upload file.");
+                    }
+                } catch (error) {
+                    console.error("Error uploading file:", error);
+                    appendMessage("Error uploading file.");
+                }
+            });
+
+            // 下载SRT按钮
+            downloadSrtBtn.addEventListener("click", () => {
+                const srtContent = generateSrt();
+                const filename = fileSelector.value ? fileSelector.value.replace(/\.[^/.]+$/, '.srt') : 'subtitles.srt';
+                downloadFile(srtContent, filename, 'text/plain; charset=utf-8');
+            });
+
+            // 下载纯文本按钮
+            downloadTxtBtn.addEventListener("click", () => {
+                const txtContent = generatePlainText();
+                const filename = fileSelector.value ? fileSelector.value.replace(/\.[^/.]+$/, '.txt') : 'subtitles.txt';
+                downloadFile(txtContent, filename, 'text/plain; charset=utf-8');
+            });
+
+            // 复制SRT按钮
+            copySrtBtn.addEventListener("click", () => {
+                const srtContent = generateSrt();
+                navigator.clipboard.writeText(srtContent).then(() => {
+                    alert("SRT 字幕已复制到剪贴板");
+                });
+            });
+
+            // 复制纯文本按钮
+            copyTxtBtn.addEventListener("click", () => {
+                const txtContent = generatePlainText();
+                navigator.clipboard.writeText(txtContent).then(() => {
+                    alert("纯文本已复制到剪贴板");
+                });
+            });
+
+            // 隐藏预览按钮
+            hideSrtBtn.addEventListener("click", () => {
+                srtPreview.style.display = "none";
+            });
+
+            // === 字幕纠错功能 ===
+            const correctionSection = document.getElementById("correctionSection");
+            const llmApiUrl = document.getElementById("llmApiUrl");
+            const llmApiKey = document.getElementById("llmApiKey");
+            const llmModel = document.getElementById("llmModel");
+            const referenceText = document.getElementById("referenceText");
+            const correctionStatus = document.getElementById("correctionStatus");
+            const correctBtn = document.getElementById("correctBtn");
+            const applyCorrectionBtn = document.getElementById("applyCorrectionBtn");
+            const downloadCorrectedSrtBtn = document.getElementById("downloadCorrectedSrtBtn");
+            const correctedPreview = document.getElementById("correctedPreview");
+            const correctedSrtText = document.getElementById("correctedSrtText");
+            const hideCorrectedBtn = document.getElementById("hideCorrectedBtn");
+
+            let correctedSrtContent = "";
+
+            // 从 localStorage 恢复 LLM 配置
+            llmApiUrl.value = localStorage.getItem("llmApiUrl") || "";
+            llmApiKey.value = localStorage.getItem("llmApiKey") || "";
+            llmModel.value = localStorage.getItem("llmModel") || "";
+
+            // 保存 LLM 配置到 localStorage
+            function saveLlmConfig() {
+                localStorage.setItem("llmApiUrl", llmApiUrl.value);
+                localStorage.setItem("llmApiKey", llmApiKey.value);
+                localStorage.setItem("llmModel", llmModel.value);
+            }
+
+            llmApiUrl.addEventListener("change", saveLlmConfig);
+            llmApiKey.addEventListener("change", saveLlmConfig);
+            llmModel.addEventListener("change", saveLlmConfig);
+
+            function setCorrectionStatus(type, message) {
+                correctionStatus.className = "correction-status " + type;
+                correctionStatus.textContent = message;
+            }
+
+            correctBtn.addEventListener("click", async () => {
+                const srtContent = generateSrt();
+                const refText = referenceText.value.trim();
+
+                if (!srtContent) {
+                    alert("没有可纠正的字幕内容");
+                    return;
+                }
+                if (!refText) {
+                    alert("请输入参考文本");
+                    return;
+                }
+
+                saveLlmConfig();
+
+                correctBtn.disabled = true;
+                setCorrectionStatus("loading", "正在调用大模型纠错，请稍候...");
+                applyCorrectionBtn.style.display = "none";
+                downloadCorrectedSrtBtn.style.display = "none";
+                correctedPreview.style.display = "none";
+
+                try {
+                    const response = await fetch(`${apiBaseUrl}/correct-subtitles/`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            srt_content: srtContent,
+                            reference_text: refText,
+                            api_base_url: llmApiUrl.value,
+                            api_key: llmApiKey.value,
+                            model: llmModel.value,
+                        }),
+                    });
+
+                    const data = await response.json();
+
+                    if (data.error) {
+                        setCorrectionStatus("error", data.error);
+                    } else {
+                        correctedSrtContent = data.corrected_srt;
+                        correctedSrtText.textContent = correctedSrtContent;
+                        correctedPreview.style.display = "block";
+                        applyCorrectionBtn.style.display = "inline-block";
+                        downloadCorrectedSrtBtn.style.display = "inline-block";
+                        setCorrectionStatus("success", "纠错完成！请检查纠正结果。");
+                    }
+                } catch (error) {
+                    console.error("纠错请求失败:", error);
+                    setCorrectionStatus("error", "请求失败: " + error.message);
+                } finally {
+                    correctBtn.disabled = false;
+                }
+            });
+
+            // 应用纠正结果：用纠正后的 SRT 替换当前字幕
+            applyCorrectionBtn.addEventListener("click", () => {
+                if (!correctedSrtContent) return;
+
+                // 重新解析纠正后的 SRT 到 subtitleSegments
+                subtitleSegments = [];
+                const blocks = correctedSrtContent.split(/\n\s*\n/);
+                for (const block of blocks) {
+                    const lines = block.trim().split("\n");
+                    if (lines.length < 3) continue;
+                    const timeMatch = lines[1].match(/(\d{2}:\d{2}:\d{2}[,.]\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}[,.]\d{3})/);
+                    if (!timeMatch) continue;
+                    const text = lines.slice(2).join("\n").trim();
+                    subtitleSegments.push({
+                        start: timeMatch[1].replace('.', ','),
+                        end: timeMatch[2].replace('.', ','),
+                        text: text,
+                    });
+                }
+
+                // 更新 SRT 预览
+                srtText.textContent = generateSrt();
+                srtPreview.style.display = "block";
+                setCorrectionStatus("success", "已应用纠正结果到当前字幕。");
+            });
+
+            // 下载纠正后的 SRT
+            downloadCorrectedSrtBtn.addEventListener("click", () => {
+                if (!correctedSrtContent) return;
+                const filename = fileSelector.value
+                    ? fileSelector.value.replace(/\.[^/.]+$/, '_corrected.srt')
+                    : 'subtitles_corrected.srt';
+                downloadFile(correctedSrtContent, filename, 'text/plain; charset=utf-8');
+            });
+
+            // 隐藏纠正预览
+            hideCorrectedBtn.addEventListener("click", () => {
+                correctedPreview.style.display = "none";
+            });
+
+            // 初始化文件列表
+            loadFiles();
+        </script>
+    </body>
+</html>

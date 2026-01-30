@@ -1,0 +1,1438 @@
+<!doctype html>
+<html lang="zh-CN">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>TTS 时间轴编辑器</title>
+        <style>
+            * {
+                box-sizing: border-box;
+            }
+            body {
+                font-family: Arial, sans-serif;
+                background-color: #f4f4f9;
+                margin: 0;
+                padding: 20px;
+                max-width: 1000px;
+                margin: 0 auto;
+            }
+            nav {
+                margin-bottom: 20px;
+            }
+            nav a {
+                margin-right: 15px;
+                color: #0078d7;
+                text-decoration: none;
+                font-weight: bold;
+            }
+            nav a:hover {
+                text-decoration: underline;
+            }
+            h1 {
+                color: #333;
+            }
+            .input-section {
+                margin-bottom: 20px;
+            }
+            textarea {
+                width: 100%;
+                height: 120px;
+                padding: 12px;
+                border: 1px solid #ccc;
+                border-radius: 5px;
+                font-size: 14px;
+                resize: vertical;
+            }
+            textarea:focus {
+                outline: none;
+                border-color: #0078d7;
+            }
+            button {
+                padding: 10px 20px;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+                font-size: 14px;
+                margin-right: 10px;
+                margin-top: 10px;
+            }
+            button:disabled {
+                background-color: #ccc;
+                cursor: not-allowed;
+            }
+            .btn-primary {
+                background-color: #0078d7;
+                color: white;
+            }
+            .btn-primary:hover:not(:disabled) {
+                background-color: #005a9e;
+            }
+            .btn-success {
+                background-color: #28a745;
+                color: white;
+            }
+            .btn-success:hover:not(:disabled) {
+                background-color: #218838;
+            }
+            .btn-secondary {
+                background-color: #6c757d;
+                color: white;
+            }
+            .btn-secondary:hover:not(:disabled) {
+                background-color: #5a6268;
+            }
+            .btn-small {
+                padding: 5px 10px;
+                font-size: 12px;
+                margin: 2px;
+            }
+            .status {
+                margin-top: 15px;
+                padding: 12px;
+                border-radius: 5px;
+                display: none;
+            }
+            .status.loading {
+                display: block;
+                background-color: #fff3cd;
+                color: #856404;
+            }
+            .status.success {
+                display: block;
+                background-color: #d4edda;
+                color: #155724;
+            }
+            .status.error {
+                display: block;
+                background-color: #f8d7da;
+                color: #721c24;
+            }
+            .timeline-container {
+                background: #fff;
+                border: 1px solid #ddd;
+                border-radius: 5px;
+                padding: 15px;
+                margin-top: 20px;
+                display: none;
+            }
+            .timeline-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 15px;
+            }
+            .timeline-header h3 {
+                margin: 0;
+                color: #333;
+            }
+            .total-duration {
+                font-size: 14px;
+                color: #666;
+            }
+            .timeline-ruler {
+                position: relative;
+                height: 25px;
+                background: #f8f9fa;
+                border-bottom: 1px solid #ddd;
+                margin-bottom: 5px;
+                overflow: hidden;
+            }
+            .ruler-mark {
+                position: absolute;
+                bottom: 0;
+                font-size: 10px;
+                color: #666;
+                transform: translateX(-50%);
+            }
+            .ruler-mark::before {
+                content: '';
+                position: absolute;
+                bottom: 12px;
+                left: 50%;
+                width: 1px;
+                height: 8px;
+                background: #999;
+            }
+            .timeline-track {
+                position: relative;
+                height: 50px;
+                background: #e9ecef;
+                border-radius: 3px;
+                overflow: hidden;
+            }
+            .segment-block {
+                position: absolute;
+                height: 100%;
+                background: #0078d7;
+                border-radius: 3px;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: white;
+                font-size: 12px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                padding: 0 5px;
+                transition: background-color 0.2s;
+            }
+            .segment-block:hover {
+                background: #005a9e;
+            }
+            .segment-block.playing {
+                background: #28a745;
+            }
+            .segment-block.dragging {
+                opacity: 0.7;
+                z-index: 100;
+                cursor: grabbing;
+            }
+            .segment-block .drag-handle {
+                position: absolute;
+                left: 0;
+                top: 0;
+                bottom: 0;
+                width: 12px;
+                cursor: grab;
+                background: rgba(255, 255, 255, 0.3);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 10px;
+            }
+            .segment-block .drag-handle:hover {
+                background: rgba(255, 255, 255, 0.5);
+            }
+            .segment-block .drag-handle::before {
+                content: '⋮⋮';
+                color: rgba(255, 255, 255, 0.8);
+            }
+            .segment-list {
+                margin-top: 20px;
+            }
+            .segment-item {
+                background: #fff;
+                border: 1px solid #ddd;
+                border-radius: 5px;
+                padding: 12px;
+                margin-bottom: 10px;
+            }
+            .segment-item-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 8px;
+            }
+            .segment-index {
+                font-weight: bold;
+                color: #0078d7;
+            }
+            .segment-timing {
+                font-size: 12px;
+                color: #666;
+            }
+            .segment-text {
+                background: #f8f9fa;
+                padding: 8px;
+                border-radius: 3px;
+                margin-bottom: 8px;
+                font-size: 14px;
+                color: #333;
+            }
+            .segment-actions {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 5px;
+            }
+            .action-buttons {
+                margin-top: 20px;
+                padding-top: 15px;
+                border-top: 1px solid #ddd;
+            }
+            /* Modal */
+            .modal {
+                display: none;
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.5);
+                z-index: 1000;
+                align-items: center;
+                justify-content: center;
+            }
+            .modal.show {
+                display: flex;
+            }
+            .modal-content {
+                background: white;
+                padding: 20px;
+                border-radius: 8px;
+                width: 90%;
+                max-width: 500px;
+                max-height: 90vh;
+                overflow-y: auto;
+            }
+            .modal-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 15px;
+            }
+            .modal-header h3 {
+                margin: 0;
+            }
+            .modal-close {
+                background: none;
+                border: none;
+                font-size: 24px;
+                cursor: pointer;
+                color: #666;
+                padding: 0;
+                margin: 0;
+            }
+            .form-group {
+                margin-bottom: 15px;
+            }
+            .form-group label {
+                display: block;
+                margin-bottom: 5px;
+                font-weight: bold;
+                color: #333;
+            }
+            .form-group input,
+            .form-group textarea {
+                width: 100%;
+                padding: 8px;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+            }
+            .form-group small {
+                color: #666;
+                font-size: 12px;
+            }
+            .modal-actions {
+                display: flex;
+                justify-content: flex-end;
+                gap: 10px;
+                margin-top: 20px;
+            }
+            audio {
+                width: 100%;
+                margin-top: 10px;
+            }
+            /* Video player section */
+            .video-section {
+                background: #fff;
+                border: 1px solid #ddd;
+                border-radius: 5px;
+                padding: 15px;
+                margin-bottom: 20px;
+            }
+            .video-section h3 {
+                margin: 0 0 15px 0;
+                color: #333;
+            }
+            .video-drop-zone {
+                border: 2px dashed #ccc;
+                border-radius: 5px;
+                padding: 40px 20px;
+                text-align: center;
+                cursor: pointer;
+                transition: all 0.3s;
+                background: #fafafa;
+            }
+            .video-drop-zone:hover,
+            .video-drop-zone.dragover {
+                border-color: #0078d7;
+                background: #f0f7ff;
+            }
+            .video-drop-zone p {
+                margin: 0;
+                color: #666;
+            }
+            .video-drop-zone .hint {
+                font-size: 12px;
+                color: #999;
+                margin-top: 8px;
+            }
+            .video-player-container {
+                display: none;
+            }
+            .video-player-container.show {
+                display: block;
+            }
+            .video-player-container video {
+                width: 100%;
+                max-height: 400px;
+                background: #000;
+                border-radius: 5px;
+            }
+            .video-controls {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                margin-top: 10px;
+                flex-wrap: wrap;
+            }
+            .video-time {
+                font-size: 14px;
+                color: #666;
+                font-family: monospace;
+            }
+            .video-subtitle-display {
+                background: rgba(0, 0, 0, 0.8);
+                color: white;
+                padding: 10px 15px;
+                border-radius: 5px;
+                margin-top: 10px;
+                min-height: 40px;
+                text-align: center;
+                font-size: 16px;
+                display: none;
+            }
+            .video-subtitle-display.show {
+                display: block;
+            }
+            .video-subtitle-display.empty {
+                color: #888;
+                font-style: italic;
+            }
+            /* Timeline playhead */
+            .timeline-playhead {
+                position: absolute;
+                top: 0;
+                bottom: 0;
+                width: 2px;
+                background: #ff0000;
+                z-index: 50;
+                pointer-events: none;
+                display: none;
+            }
+            .timeline-playhead::before {
+                content: '';
+                position: absolute;
+                top: -5px;
+                left: -4px;
+                width: 0;
+                height: 0;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 6px solid #ff0000;
+            }
+            .timeline-playhead.show {
+                display: block;
+            }
+            /* Highlight current segment */
+            .segment-item.current {
+                border-color: #0078d7;
+                box-shadow: 0 0 8px rgba(0, 120, 215, 0.4);
+            }
+        </style>
+    </head>
+    <body>
+        <nav style="display: flex; align-items: center;">
+            <a href="/">首页</a>
+            <a href="/srt-to-speech">SRT to Speech</a>
+            <a href="/tts-timeline">TTS 时间轴</a>
+            <span style="margin-left: auto;" id="authArea">
+                <a href="/login" style="color: #0078d7; text-decoration: none;">登录</a>
+            </span>
+        </nav>
+
+        <h1>TTS 时间轴编辑器</h1>
+        <p>输入文本生成分段语音，可编辑每段并调整时间轴位置</p>
+
+        <!-- Video Player Section -->
+        <div class="video-section">
+            <h3>本地视频预览（可选）</h3>
+            <div class="video-drop-zone" id="videoDropZone">
+                <p>点击选择或拖拽视频文件到此处</p>
+                <p class="hint">支持 MP4、WebM、OGG 等格式，文件不会上传</p>
+                <input type="file" id="videoFileInput" accept="video/*" style="display: none;">
+            </div>
+            <div class="video-player-container" id="videoPlayerContainer">
+                <video id="videoPlayer" controls></video>
+                <div class="video-controls">
+                    <span class="video-time" id="videoTime">00:00.000 / 00:00.000</span>
+                    <button class="btn-small btn-secondary" id="removeVideoBtn">移除视频</button>
+                    <button class="btn-small btn-primary" id="setSegmentStartBtn" title="将当前视频时间设为选中片段的起始时间">设为片段起始时间</button>
+                </div>
+                <div class="video-subtitle-display" id="videoSubtitle"></div>
+            </div>
+        </div>
+
+        <div class="input-section">
+            <textarea id="textInput" placeholder="请输入要转换的文本...&#10;支持中英文标点符号自动分句（。？！；等）"></textarea>
+            <button id="generateBtn" class="btn-primary">生成语音</button>
+        </div>
+
+        <div class="status" id="status"></div>
+
+        <div class="timeline-container" id="timelineContainer">
+            <div class="timeline-header">
+                <h3>时间轴</h3>
+                <span class="total-duration" id="totalDuration">总时长: 0.00s</span>
+            </div>
+            <div class="timeline-ruler" id="timelineRuler"></div>
+            <div class="timeline-track" id="timelineTrack">
+                <div class="timeline-playhead" id="timelinePlayhead"></div>
+            </div>
+
+            <div class="segment-list" id="segmentList"></div>
+
+            <div class="action-buttons">
+                <button id="playAllBtn" class="btn-success" disabled>播放全部</button>
+                <button id="stopBtn" class="btn-secondary" disabled>停止</button>
+                <button id="downloadBtn" class="btn-primary" disabled>下载合并音频</button>
+                <button id="downloadSrtBtn" class="btn-primary" disabled>下载 SRT 字幕</button>
+            </div>
+        </div>
+
+        <!-- Edit Modal -->
+        <div class="modal" id="editModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>编辑片段 #<span id="editSegmentIndex"></span></h3>
+                    <button class="modal-close" id="modalClose">&times;</button>
+                </div>
+                <div class="form-group">
+                    <label for="editText">文本内容</label>
+                    <textarea id="editText" rows="3"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="editDuration">目标时长 (秒)</label>
+                    <input type="number" id="editDuration" step="0.1" min="0" placeholder="留空则自动">
+                    <small>留空则按自然语速生成</small>
+                </div>
+                <div class="form-group">
+                    <label for="editOffset">起始位置 (毫秒)</label>
+                    <input type="number" id="editOffset" step="100" min="0">
+                    <small>该片段在时间轴上的开始时间点</small>
+                </div>
+                <div class="modal-actions">
+                    <button id="cancelEditBtn" class="btn-secondary">取消</button>
+                    <button id="saveOffsetBtn" class="btn-primary">仅保存位置</button>
+                    <button id="regenerateBtn" class="btn-success">重新生成</button>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            const apiBaseUrl = window.location.origin;
+
+            // 登录状态检测
+            (async function checkAuth() {
+                const authArea = document.getElementById('authArea');
+                try {
+                    const resp = await fetch(`${apiBaseUrl}/auth/me`);
+                    if (resp.ok) {
+                        const user = await resp.json();
+                        authArea.innerHTML =
+                            `<span style="color: #333; margin-right: 10px;">${user.username}</span>` +
+                            `<a href="#" id="logoutBtn" style="color: #0078d7; text-decoration: none;">登出</a>`;
+                        document.getElementById('logoutBtn').addEventListener('click', async (e) => {
+                            e.preventDefault();
+                            await fetch(`${apiBaseUrl}/auth/logout`, { method: 'POST' });
+                            sessionStorage.removeItem('auth_token');
+                            window.location.reload();
+                        });
+                    }
+                } catch (_) {}
+            })();
+
+            // Video state
+            let videoState = {
+                hasVideo: false,
+                videoUrl: null,
+                selectedSegmentIndex: -1
+            };
+
+            // State
+            let timelineState = {
+                segments: [],
+                totalDuration_ms: 0,
+                scale: 50, // pixels per second
+                isPlaying: false,
+                currentPlayingIndex: -1,
+                playbackTimeouts: []
+            };
+
+            let currentEditIndex = -1;
+            let currentAudio = null;
+
+            // DOM Elements
+            const textInput = document.getElementById('textInput');
+            const generateBtn = document.getElementById('generateBtn');
+            const statusDiv = document.getElementById('status');
+            const timelineContainer = document.getElementById('timelineContainer');
+            const timelineRuler = document.getElementById('timelineRuler');
+            const timelineTrack = document.getElementById('timelineTrack');
+            const segmentList = document.getElementById('segmentList');
+            const totalDurationSpan = document.getElementById('totalDuration');
+            const playAllBtn = document.getElementById('playAllBtn');
+            const stopBtn = document.getElementById('stopBtn');
+            const downloadBtn = document.getElementById('downloadBtn');
+            const downloadSrtBtn = document.getElementById('downloadSrtBtn');
+            const editModal = document.getElementById('editModal');
+            const editSegmentIndex = document.getElementById('editSegmentIndex');
+            const editText = document.getElementById('editText');
+            const editDuration = document.getElementById('editDuration');
+            const editOffset = document.getElementById('editOffset');
+            const modalClose = document.getElementById('modalClose');
+            const cancelEditBtn = document.getElementById('cancelEditBtn');
+            const saveOffsetBtn = document.getElementById('saveOffsetBtn');
+            const regenerateBtn = document.getElementById('regenerateBtn');
+
+            // Video DOM Elements
+            const videoDropZone = document.getElementById('videoDropZone');
+            const videoFileInput = document.getElementById('videoFileInput');
+            const videoPlayerContainer = document.getElementById('videoPlayerContainer');
+            const videoPlayer = document.getElementById('videoPlayer');
+            const videoTime = document.getElementById('videoTime');
+            const removeVideoBtn = document.getElementById('removeVideoBtn');
+            const setSegmentStartBtn = document.getElementById('setSegmentStartBtn');
+            const videoSubtitle = document.getElementById('videoSubtitle');
+            const timelinePlayhead = document.getElementById('timelinePlayhead');
+
+            // Utility Functions
+            function showStatus(message, type) {
+                statusDiv.textContent = message;
+                statusDiv.className = 'status ' + type;
+            }
+
+            function hideStatus() {
+                statusDiv.className = 'status';
+            }
+
+            function formatTime(ms) {
+                const seconds = ms / 1000;
+                return seconds.toFixed(2) + 's';
+            }
+
+            function formatTimeMs(ms) {
+                return ms.toFixed(0) + 'ms';
+            }
+
+            function base64ToBlob(base64, mimeType) {
+                const byteCharacters = atob(base64);
+                const byteNumbers = new Array(byteCharacters.length);
+                for (let i = 0; i < byteCharacters.length; i++) {
+                    byteNumbers[i] = byteCharacters.charCodeAt(i);
+                }
+                const byteArray = new Uint8Array(byteNumbers);
+                return new Blob([byteArray], { type: mimeType });
+            }
+
+            // Calculate timeline end (max of segment end times)
+            function calculateTimelineEnd() {
+                if (timelineState.segments.length === 0) return 0;
+                let maxEnd = 0;
+                for (const seg of timelineState.segments) {
+                    const end = seg.start_offset_ms + seg.duration_ms;
+                    if (end > maxEnd) maxEnd = end;
+                }
+                return maxEnd;
+            }
+
+            // Render Timeline
+            function renderTimeline() {
+                const totalMs = calculateTimelineEnd();
+                timelineState.totalDuration_ms = totalMs;
+                totalDurationSpan.textContent = '总时长: ' + formatTime(totalMs);
+
+                // Adjust scale based on container width
+                const containerWidth = timelineTrack.offsetWidth;
+                const totalSeconds = totalMs / 1000;
+                if (totalSeconds > 0) {
+                    timelineState.scale = Math.max(20, containerWidth / totalSeconds);
+                }
+
+                renderRuler(totalMs);
+                renderTrack();
+                renderSegmentList();
+
+                // Enable buttons
+                playAllBtn.disabled = timelineState.segments.length === 0;
+                downloadBtn.disabled = timelineState.segments.length === 0;
+                downloadSrtBtn.disabled = timelineState.segments.length === 0;
+            }
+
+            function renderRuler(totalMs) {
+                timelineRuler.innerHTML = '';
+                const totalSeconds = Math.ceil(totalMs / 1000);
+                const interval = totalSeconds <= 10 ? 1 : totalSeconds <= 30 ? 5 : 10;
+
+                for (let s = 0; s <= totalSeconds; s += interval) {
+                    const mark = document.createElement('div');
+                    mark.className = 'ruler-mark';
+                    mark.style.left = (s * timelineState.scale) + 'px';
+                    mark.textContent = s + 's';
+                    timelineRuler.appendChild(mark);
+                }
+            }
+
+            function renderTrack() {
+                timelineTrack.innerHTML = '';
+                const colors = ['#0078d7', '#28a745', '#dc3545', '#ffc107', '#17a2b8', '#6f42c1'];
+
+                timelineState.segments.forEach((seg, index) => {
+                    const block = document.createElement('div');
+                    block.className = 'segment-block';
+                    if (timelineState.currentPlayingIndex === index) {
+                        block.classList.add('playing');
+                    }
+                    block.style.left = (seg.start_offset_ms / 1000 * timelineState.scale) + 'px';
+                    block.style.width = Math.max(20, seg.duration_ms / 1000 * timelineState.scale) + 'px';
+                    block.style.backgroundColor = colors[index % colors.length];
+                    block.dataset.index = index;
+
+                    // Add drag handle
+                    const dragHandle = document.createElement('div');
+                    dragHandle.className = 'drag-handle';
+                    block.appendChild(dragHandle);
+
+                    // Add label
+                    const label = document.createElement('span');
+                    label.style.marginLeft = '12px';
+                    label.textContent = '#' + (index + 1);
+                    block.appendChild(label);
+
+                    block.title = seg.text.substring(0, 50) + (seg.text.length > 50 ? '...' : '');
+
+                    // Click to play (but not on drag handle)
+                    block.addEventListener('click', (e) => {
+                        if (!e.target.classList.contains('drag-handle')) {
+                            playSegment(index);
+                        }
+                    });
+
+                    // Drag functionality
+                    initDragForBlock(block, index);
+
+                    timelineTrack.appendChild(block);
+                });
+            }
+
+            // Drag and drop functionality
+            let dragState = {
+                isDragging: false,
+                currentBlock: null,
+                currentIndex: -1,
+                startX: 0,
+                startLeft: 0
+            };
+
+            function initDragForBlock(block, index) {
+                const dragHandle = block.querySelector('.drag-handle');
+
+                dragHandle.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    dragState.isDragging = true;
+                    dragState.currentBlock = block;
+                    dragState.currentIndex = index;
+                    dragState.startX = e.clientX;
+                    dragState.startLeft = timelineState.segments[index].start_offset_ms / 1000 * timelineState.scale;
+
+                    block.classList.add('dragging');
+                    document.body.style.cursor = 'grabbing';
+                });
+            }
+
+            document.addEventListener('mousemove', (e) => {
+                if (!dragState.isDragging || !dragState.currentBlock) return;
+
+                const deltaX = e.clientX - dragState.startX;
+                let newLeft = dragState.startLeft + deltaX;
+
+                // Constrain to track bounds
+                newLeft = Math.max(0, newLeft);
+
+                dragState.currentBlock.style.left = newLeft + 'px';
+            });
+
+            document.addEventListener('mouseup', (e) => {
+                if (!dragState.isDragging || !dragState.currentBlock) return;
+
+                const deltaX = e.clientX - dragState.startX;
+                // Convert delta pixels to milliseconds
+                const deltaMs = Math.round(deltaX / timelineState.scale * 1000);
+
+                // Get the current segment's start offset
+                const currentSegment = timelineState.segments[dragState.currentIndex];
+                const currentStartMs = currentSegment.start_offset_ms;
+
+                // Calculate new offset (ensure it doesn't go below 0)
+                const newOffsetMs = Math.max(0, currentStartMs + deltaMs);
+                const actualDeltaMs = newOffsetMs - currentStartMs;
+
+                // Update current segment
+                currentSegment.start_offset_ms = newOffsetMs;
+
+                // Move all segments to the right of current segment by the same delta
+                if (actualDeltaMs !== 0) {
+                    timelineState.segments.forEach((seg, index) => {
+                        if (index !== dragState.currentIndex && seg.start_offset_ms > currentStartMs) {
+                            seg.start_offset_ms = Math.max(0, seg.start_offset_ms + actualDeltaMs);
+                        }
+                    });
+                }
+
+                // Reset drag state
+                dragState.currentBlock.classList.remove('dragging');
+                document.body.style.cursor = '';
+                dragState.isDragging = false;
+                dragState.currentBlock = null;
+                dragState.currentIndex = -1;
+
+                // Re-render to update everything
+                renderTimeline();
+            });
+
+            function renderSegmentList() {
+                segmentList.innerHTML = '';
+
+                timelineState.segments.forEach((seg, index) => {
+                    const item = document.createElement('div');
+                    item.className = 'segment-item';
+                    item.innerHTML = `
+                        <div class="segment-item-header">
+                            <span class="segment-index">#${index + 1}</span>
+                            <span class="segment-timing">
+                                起始: ${formatTimeMs(seg.start_offset_ms)} | 时长: ${formatTime(seg.duration_ms)}
+                            </span>
+                        </div>
+                        <div class="segment-text">${escapeHtml(seg.text)}</div>
+                        <div class="segment-actions">
+                            <button class="btn-success btn-small" onclick="playSegment(${index})">播放</button>
+                            <button class="btn-primary btn-small" onclick="openEditModal(${index})">编辑</button>
+                            <button class="btn-secondary btn-small" onclick="deleteSegment(${index})">删除</button>
+                        </div>
+                    `;
+                    segmentList.appendChild(item);
+                });
+            }
+
+            function escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
+            // Generate Speech
+            generateBtn.addEventListener('click', async () => {
+                const text = textInput.value.trim();
+                if (!text) {
+                    showStatus('请输入文本', 'error');
+                    return;
+                }
+
+                generateBtn.disabled = true;
+                showStatus('正在生成语音，请稍候...', 'loading');
+                timelineContainer.style.display = 'none';
+
+                const formData = new FormData();
+                formData.append('text', text);
+
+                try {
+                    const response = await fetch(`${apiBaseUrl}/text-to-speech/`, {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok && data.segments) {
+                        // Process segments
+                        timelineState.segments = [];
+                        let cumulativeOffset = 0;
+
+                        for (let i = 0; i < data.segments.length; i++) {
+                            const seg = data.segments[i];
+                            const blob = base64ToBlob(seg.audio, 'audio/mpeg');
+                            const audioUrl = URL.createObjectURL(blob);
+
+                            timelineState.segments.push({
+                                id: i,
+                                text: seg.text,
+                                audio: seg.audio,
+                                duration_ms: seg.duration_ms,
+                                start_offset_ms: cumulativeOffset,
+                                audioBlob: blob,
+                                audioUrl: audioUrl
+                            });
+
+                            cumulativeOffset += seg.duration_ms;
+                        }
+
+                        timelineState.totalDuration_ms = data.total_duration_ms;
+                        timelineContainer.style.display = 'block';
+                        renderTimeline();
+                        showStatus(`成功生成 ${data.segments.length} 个片段`, 'success');
+                    } else {
+                        showStatus('生成失败: ' + (data.error || '未知错误'), 'error');
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    showStatus('请求失败: ' + error.message, 'error');
+                } finally {
+                    generateBtn.disabled = false;
+                }
+            });
+
+            // Playback
+            function playSegment(index) {
+                stopPlayback();
+                const seg = timelineState.segments[index];
+                if (!seg) return;
+
+                currentAudio = new Audio(seg.audioUrl);
+                timelineState.currentPlayingIndex = index;
+                renderTrack();
+
+                currentAudio.onended = () => {
+                    timelineState.currentPlayingIndex = -1;
+                    renderTrack();
+                    stopBtn.disabled = true;
+                };
+
+                currentAudio.play();
+                stopBtn.disabled = false;
+            }
+
+            playAllBtn.addEventListener('click', () => {
+                if (timelineState.segments.length === 0) return;
+                stopPlayback();
+                timelineState.isPlaying = true;
+                playAllBtn.disabled = true;
+                stopBtn.disabled = false;
+
+                // Sort segments by start_offset_ms
+                const sortedSegments = [...timelineState.segments].sort((a, b) => a.start_offset_ms - b.start_offset_ms);
+
+                // Schedule playback based on start offsets
+                const startTime = Date.now();
+                sortedSegments.forEach((seg, i) => {
+                    const delay = seg.start_offset_ms;
+                    const timeout = setTimeout(() => {
+                        if (!timelineState.isPlaying) return;
+                        const originalIndex = timelineState.segments.findIndex(s => s.id === seg.id);
+                        currentAudio = new Audio(seg.audioUrl);
+                        timelineState.currentPlayingIndex = originalIndex;
+                        renderTrack();
+
+                        currentAudio.onended = () => {
+                            if (i === sortedSegments.length - 1) {
+                                // Last segment finished
+                                timelineState.isPlaying = false;
+                                timelineState.currentPlayingIndex = -1;
+                                renderTrack();
+                                playAllBtn.disabled = false;
+                                stopBtn.disabled = true;
+                            }
+                        };
+
+                        currentAudio.play();
+                    }, delay);
+                    timelineState.playbackTimeouts.push(timeout);
+                });
+            });
+
+            stopBtn.addEventListener('click', stopPlayback);
+
+            function stopPlayback() {
+                timelineState.isPlaying = false;
+                timelineState.currentPlayingIndex = -1;
+
+                // Clear all scheduled timeouts
+                timelineState.playbackTimeouts.forEach(t => clearTimeout(t));
+                timelineState.playbackTimeouts = [];
+
+                if (currentAudio) {
+                    currentAudio.pause();
+                    currentAudio = null;
+                }
+
+                renderTrack();
+                playAllBtn.disabled = timelineState.segments.length === 0;
+                stopBtn.disabled = true;
+            }
+
+            // Edit Modal
+            function openEditModal(index) {
+                currentEditIndex = index;
+                const seg = timelineState.segments[index];
+                if (!seg) return;
+
+                editSegmentIndex.textContent = index + 1;
+                editText.value = seg.text;
+                editDuration.value = '';
+                editOffset.value = seg.start_offset_ms;
+                editModal.classList.add('show');
+            }
+
+            function closeEditModal() {
+                editModal.classList.remove('show');
+                currentEditIndex = -1;
+            }
+
+            modalClose.addEventListener('click', closeEditModal);
+            cancelEditBtn.addEventListener('click', closeEditModal);
+
+            editModal.addEventListener('click', (e) => {
+                if (e.target === editModal) closeEditModal();
+            });
+
+            // Save offset only
+            saveOffsetBtn.addEventListener('click', () => {
+                if (currentEditIndex < 0) return;
+                const newOffset = parseInt(editOffset.value) || 0;
+                timelineState.segments[currentEditIndex].start_offset_ms = Math.max(0, newOffset);
+                renderTimeline();
+                closeEditModal();
+            });
+
+            // Regenerate segment
+            regenerateBtn.addEventListener('click', async () => {
+                if (currentEditIndex < 0) return;
+
+                const text = editText.value.trim();
+                if (!text) {
+                    alert('请输入文本');
+                    return;
+                }
+
+                const durationValue = editDuration.value.trim();
+                const newOffset = parseInt(editOffset.value) || 0;
+
+                regenerateBtn.disabled = true;
+                regenerateBtn.textContent = '生成中...';
+
+                const formData = new FormData();
+                formData.append('text', text);
+                if (durationValue) {
+                    formData.append('duration_seconds', parseFloat(durationValue));
+                }
+
+                try {
+                    const response = await fetch(`${apiBaseUrl}/text-to-speech/`, {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok && data.segments && data.segments.length > 0) {
+                        // Use first segment from response
+                        const newSeg = data.segments[0];
+                        const blob = base64ToBlob(newSeg.audio, 'audio/mpeg');
+                        const audioUrl = URL.createObjectURL(blob);
+
+                        // Revoke old URL
+                        if (timelineState.segments[currentEditIndex].audioUrl) {
+                            URL.revokeObjectURL(timelineState.segments[currentEditIndex].audioUrl);
+                        }
+
+                        // Update segment
+                        timelineState.segments[currentEditIndex] = {
+                            ...timelineState.segments[currentEditIndex],
+                            text: newSeg.text,
+                            audio: newSeg.audio,
+                            duration_ms: newSeg.duration_ms,
+                            start_offset_ms: Math.max(0, newOffset),
+                            audioBlob: blob,
+                            audioUrl: audioUrl
+                        };
+
+                        renderTimeline();
+                        closeEditModal();
+                        showStatus('片段已重新生成', 'success');
+                    } else {
+                        alert('生成失败: ' + (data.error || '未知错误'));
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    alert('请求失败: ' + error.message);
+                } finally {
+                    regenerateBtn.disabled = false;
+                    regenerateBtn.textContent = '重新生成';
+                }
+            });
+
+            // Delete segment
+            function deleteSegment(index) {
+                if (!confirm('确定删除这个片段吗？')) return;
+
+                // Revoke URL
+                if (timelineState.segments[index].audioUrl) {
+                    URL.revokeObjectURL(timelineState.segments[index].audioUrl);
+                }
+
+                timelineState.segments.splice(index, 1);
+
+                // Update IDs
+                timelineState.segments.forEach((seg, i) => {
+                    seg.id = i;
+                });
+
+                renderTimeline();
+            }
+
+            // Download merged audio
+            downloadBtn.addEventListener('click', async () => {
+                if (timelineState.segments.length === 0) return;
+
+                downloadBtn.disabled = true;
+                downloadBtn.textContent = '合并中...';
+
+                // Prepare segments data for API
+                const segmentsData = timelineState.segments.map(seg => ({
+                    audio: seg.audio,
+                    start_offset_ms: seg.start_offset_ms,
+                    duration_ms: seg.duration_ms
+                }));
+
+                try {
+                    const response = await fetch(`${apiBaseUrl}/merge-audio/`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ segments: segmentsData })
+                    });
+
+                    if (response.ok) {
+                        const blob = await response.blob();
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'merged_audio.mp3';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                        showStatus('下载完成', 'success');
+                    } else {
+                        const data = await response.json();
+                        showStatus('合并失败: ' + (data.error || '未知错误'), 'error');
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    showStatus('下载失败: ' + error.message, 'error');
+                } finally {
+                    downloadBtn.disabled = false;
+                    downloadBtn.textContent = '下载合并音频';
+                }
+            });
+
+            // Download SRT
+            downloadSrtBtn.addEventListener('click', async () => {
+                if (timelineState.segments.length === 0) return;
+
+                downloadSrtBtn.disabled = true;
+                downloadSrtBtn.textContent = '生成中...';
+
+                // Prepare segments data for API
+                const segmentsData = timelineState.segments.map(seg => ({
+                    text: seg.text,
+                    start_offset_ms: seg.start_offset_ms,
+                    duration_ms: seg.duration_ms
+                }));
+
+                try {
+                    const response = await fetch(`${apiBaseUrl}/generate-srt/`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ segments: segmentsData })
+                    });
+
+                    if (response.ok) {
+                        const blob = await response.blob();
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'timeline.srt';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                        showStatus('SRT 下载完成', 'success');
+                    } else {
+                        const data = await response.json();
+                        showStatus('生成 SRT 失败: ' + (data.error || '未知错误'), 'error');
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    showStatus('下载 SRT 失败: ' + error.message, 'error');
+                } finally {
+                    downloadSrtBtn.disabled = false;
+                    downloadSrtBtn.textContent = '下载 SRT 字幕';
+                }
+            });
+
+            // ============ Video Player Functions ============
+
+            // Format time for video display
+            function formatVideoTime(seconds) {
+                const mins = Math.floor(seconds / 60);
+                const secs = Math.floor(seconds % 60);
+                const ms = Math.floor((seconds % 1) * 1000);
+                return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
+            }
+
+            // Load video file
+            function loadVideoFile(file) {
+                if (!file || !file.type.startsWith('video/')) {
+                    showStatus('请选择有效的视频文件', 'error');
+                    return;
+                }
+
+                // Revoke previous URL
+                if (videoState.videoUrl) {
+                    URL.revokeObjectURL(videoState.videoUrl);
+                }
+
+                videoState.videoUrl = URL.createObjectURL(file);
+                videoState.hasVideo = true;
+
+                videoPlayer.src = videoState.videoUrl;
+                videoDropZone.style.display = 'none';
+                videoPlayerContainer.classList.add('show');
+                videoSubtitle.classList.add('show');
+
+                showStatus(`已加载视频: ${file.name}`, 'success');
+            }
+
+            // Remove video
+            function removeVideo() {
+                if (videoState.videoUrl) {
+                    URL.revokeObjectURL(videoState.videoUrl);
+                }
+                videoState.videoUrl = null;
+                videoState.hasVideo = false;
+                videoPlayer.src = '';
+                videoPlayerContainer.classList.remove('show');
+                videoDropZone.style.display = 'block';
+                videoSubtitle.classList.remove('show');
+                timelinePlayhead.classList.remove('show');
+            }
+
+            // Video drop zone click
+            videoDropZone.addEventListener('click', () => {
+                videoFileInput.click();
+            });
+
+            // File input change
+            videoFileInput.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) {
+                    loadVideoFile(e.target.files[0]);
+                }
+            });
+
+            // Drag and drop for video
+            videoDropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                videoDropZone.classList.add('dragover');
+            });
+
+            videoDropZone.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                videoDropZone.classList.remove('dragover');
+            });
+
+            videoDropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                videoDropZone.classList.remove('dragover');
+
+                if (e.dataTransfer.files.length > 0) {
+                    loadVideoFile(e.dataTransfer.files[0]);
+                }
+            });
+
+            // Remove video button
+            removeVideoBtn.addEventListener('click', removeVideo);
+
+            // Update video time display and sync subtitle
+            videoPlayer.addEventListener('timeupdate', () => {
+                const currentTime = videoPlayer.currentTime;
+                const duration = videoPlayer.duration || 0;
+
+                videoTime.textContent = `${formatVideoTime(currentTime)} / ${formatVideoTime(duration)}`;
+
+                // Update playhead position on timeline
+                updatePlayhead(currentTime * 1000);
+
+                // Find and display current subtitle
+                updateCurrentSubtitle(currentTime * 1000);
+            });
+
+            // Update playhead position on timeline
+            function updatePlayhead(currentMs) {
+                if (timelineState.segments.length === 0) {
+                    timelinePlayhead.classList.remove('show');
+                    return;
+                }
+
+                timelinePlayhead.classList.add('show');
+                const leftPx = currentMs / 1000 * timelineState.scale;
+                timelinePlayhead.style.left = leftPx + 'px';
+            }
+
+            // Find and display current subtitle based on video time
+            function updateCurrentSubtitle(currentMs) {
+                let foundSegment = null;
+                let foundIndex = -1;
+
+                for (let i = 0; i < timelineState.segments.length; i++) {
+                    const seg = timelineState.segments[i];
+                    const segStart = seg.start_offset_ms;
+                    const segEnd = segStart + seg.duration_ms;
+
+                    if (currentMs >= segStart && currentMs < segEnd) {
+                        foundSegment = seg;
+                        foundIndex = i;
+                        break;
+                    }
+                }
+
+                // Update subtitle display
+                if (foundSegment) {
+                    videoSubtitle.textContent = foundSegment.text;
+                    videoSubtitle.classList.remove('empty');
+                } else {
+                    videoSubtitle.textContent = '(无字幕)';
+                    videoSubtitle.classList.add('empty');
+                }
+
+                // Highlight current segment in list
+                highlightCurrentSegment(foundIndex);
+            }
+
+            // Highlight current segment in list
+            function highlightCurrentSegment(index) {
+                const items = segmentList.querySelectorAll('.segment-item');
+                items.forEach((item, i) => {
+                    if (i === index) {
+                        item.classList.add('current');
+                    } else {
+                        item.classList.remove('current');
+                    }
+                });
+            }
+
+            // Set segment start time from video position
+            setSegmentStartBtn.addEventListener('click', () => {
+                if (videoState.selectedSegmentIndex < 0) {
+                    showStatus('请先点击一个字幕片段以选中它', 'error');
+                    return;
+                }
+
+                const currentMs = Math.round(videoPlayer.currentTime * 1000);
+                timelineState.segments[videoState.selectedSegmentIndex].start_offset_ms = currentMs;
+                renderTimeline();
+                showStatus(`片段 #${videoState.selectedSegmentIndex + 1} 起始时间已设为 ${formatVideoTime(videoPlayer.currentTime)}`, 'success');
+            });
+
+            // Select segment for editing
+            function selectSegment(index) {
+                videoState.selectedSegmentIndex = index;
+
+                // Update visual selection
+                const items = segmentList.querySelectorAll('.segment-item');
+                items.forEach((item, i) => {
+                    if (i === index) {
+                        item.style.outline = '2px solid #0078d7';
+                    } else {
+                        item.style.outline = 'none';
+                    }
+                });
+
+                // Also update timeline track blocks
+                const blocks = timelineTrack.querySelectorAll('.segment-block');
+                blocks.forEach((block, i) => {
+                    if (i === index) {
+                        block.style.outline = '2px solid white';
+                        block.style.outlineOffset = '-2px';
+                    } else {
+                        block.style.outline = 'none';
+                    }
+                });
+            }
+
+            // Click on timeline to seek video
+            timelineTrack.addEventListener('click', (e) => {
+                if (!videoState.hasVideo) return;
+                if (e.target.classList.contains('segment-block') || e.target.classList.contains('drag-handle')) return;
+
+                const rect = timelineTrack.getBoundingClientRect();
+                const clickX = e.clientX - rect.left;
+                const timeMs = clickX / timelineState.scale * 1000;
+                const timeSec = timeMs / 1000;
+
+                if (timeSec >= 0 && timeSec <= videoPlayer.duration) {
+                    videoPlayer.currentTime = timeSec;
+                }
+            });
+
+            // Override renderSegmentList to add selection capability
+            const originalRenderSegmentList = renderSegmentList;
+            renderSegmentList = function() {
+                segmentList.innerHTML = '';
+
+                timelineState.segments.forEach((seg, index) => {
+                    const item = document.createElement('div');
+                    item.className = 'segment-item';
+                    if (videoState.selectedSegmentIndex === index) {
+                        item.style.outline = '2px solid #0078d7';
+                    }
+                    item.innerHTML = `
+                        <div class="segment-item-header">
+                            <span class="segment-index">#${index + 1}</span>
+                            <span class="segment-timing">
+                                起始: ${formatTimeMs(seg.start_offset_ms)} | 时长: ${formatTime(seg.duration_ms)}
+                            </span>
+                        </div>
+                        <div class="segment-text">${escapeHtml(seg.text)}</div>
+                        <div class="segment-actions">
+                            <button class="btn-success btn-small" onclick="playSegment(${index})">播放</button>
+                            <button class="btn-primary btn-small" onclick="openEditModal(${index})">编辑</button>
+                            <button class="btn-secondary btn-small" onclick="deleteSegment(${index})">删除</button>
+                            ${videoState.hasVideo ? `<button class="btn-small" style="background:#17a2b8;color:white" onclick="jumpToSegment(${index})">跳转视频</button>` : ''}
+                        </div>
+                    `;
+
+                    // Click to select segment
+                    item.addEventListener('click', (e) => {
+                        if (e.target.tagName !== 'BUTTON') {
+                            selectSegment(index);
+                        }
+                    });
+
+                    segmentList.appendChild(item);
+                });
+            };
+
+            // Jump video to segment start time
+            function jumpToSegment(index) {
+                if (!videoState.hasVideo) return;
+                const seg = timelineState.segments[index];
+                if (!seg) return;
+
+                videoPlayer.currentTime = seg.start_offset_ms / 1000;
+                selectSegment(index);
+            }
+
+            // Make jumpToSegment available globally
+            window.jumpToSegment = jumpToSegment;
+        </script>
+    </body>
+</html>

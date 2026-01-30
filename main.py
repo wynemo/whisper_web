@@ -12,6 +12,7 @@ from pydub import AudioSegment
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi_toolbox import run_server
+from fastapi_toolbox.static_files import StaticFilesCache
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 from subprocess import Popen, PIPE, STDOUT
@@ -170,32 +171,12 @@ async def startup_event():
 UPLOAD_DIR = "upload"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-# 挂载静态文件目录
-# app.mount("/static", StaticFiles(directory="static"), name="static")
-
-
-@app.get("/")
-async def serve_index():
-    """提供 index.html 文件"""
-    return FileResponse("index.html")
-
-
-@app.get("/srt-to-speech")
-async def serve_srt_to_speech():
-    """提供 SRT 转语音页面"""
-    return FileResponse("srt_to_speech.html")
-
-
-@app.get("/tts-timeline")
-async def serve_tts_timeline():
-    """提供 TTS 时间轴编辑页面"""
-    return FileResponse("tts_timeline.html")
-
-
-@app.get("/login")
-async def serve_login():
-    """提供登录页面"""
-    return FileResponse("login.html")
+# 挂载静态页面目录
+PAGES_DIR = os.path.join(os.path.dirname(__file__), "pages")
+try:
+    app.mount("/", StaticFilesCache(directory=PAGES_DIR, html=True), name="pages")
+except Exception as e:
+    logging.error(f"静态文件目录挂载失败：{e}")
 
 
 # ==================== 认证接口 ====================
