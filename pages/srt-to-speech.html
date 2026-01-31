@@ -91,10 +91,40 @@
                 width: 100%;
                 margin-top: 15px;
             }
+
+            /* Mobile responsive */
+            @media (max-width: 600px) {
+                body {
+                    padding: 12px;
+                }
+                h1 {
+                    font-size: 20px;
+                }
+                nav {
+                    flex-wrap: wrap;
+                    gap: 6px;
+                }
+                nav a {
+                    font-size: 14px;
+                }
+                .upload-area {
+                    padding: 24px 16px;
+                }
+                .file-label {
+                    padding: 14px 20px;
+                    font-size: 15px;
+                }
+                button {
+                    width: 100%;
+                    padding: 14px 24px;
+                    font-size: 16px;
+                    min-height: 44px;
+                }
+            }
         </style>
     </head>
     <body>
-        <nav style="margin-bottom: 20px; display: flex; align-items: center;">
+        <nav style="margin-bottom: 20px; display: flex; align-items: center; flex-wrap: wrap; gap: 4px;">
             <a href="/" style="margin-right: 15px; color: #0078d7; text-decoration: none; font-weight: bold;">首页</a>
             <a href="/srt-to-speech" style="margin-right: 15px; color: #0078d7; text-decoration: none;">SRT to Speech</a>
             <a href="/tts-timeline" style="margin-right: 15px; color: #0078d7; text-decoration: none;">TTS 时间轴</a>

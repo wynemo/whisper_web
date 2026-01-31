@@ -102,10 +102,61 @@
                 background: #d4edda;
                 color: #155724;
             }
+
+            /* Mobile responsive */
+            @media (max-width: 600px) {
+                body {
+                    padding: 12px;
+                }
+                h1 {
+                    font-size: 20px;
+                }
+                h2 {
+                    font-size: 17px;
+                }
+                nav {
+                    flex-wrap: wrap;
+                    gap: 6px;
+                }
+                nav a {
+                    font-size: 14px;
+                }
+                .llm-config {
+                    grid-template-columns: 1fr;
+                }
+                #output {
+                    height: 200px;
+                    font-size: 13px;
+                }
+                button {
+                    padding: 12px 14px;
+                    font-size: 14px;
+                    min-height: 44px;
+                }
+                select {
+                    font-size: 14px;
+                }
+                textarea {
+                    font-size: 14px;
+                }
+                #downloadSection button {
+                    display: block;
+                    width: 100%;
+                    margin-bottom: 8px;
+                }
+                .correction-section {
+                    padding: 14px;
+                }
+                .correction-section button {
+                    display: block;
+                    width: 100%;
+                    margin-bottom: 8px;
+                }
+            }
         </style>
     </head>
     <body>
-        <nav style="margin-bottom: 20px; display: flex; align-items: center;">
+        <nav style="margin-bottom: 20px; display: flex; align-items: center; flex-wrap: wrap; gap: 4px;">
             <a href="/" style="margin-right: 15px; color: #0078d7; text-decoration: none; font-weight: bold;">首页</a>
             <a href="srt-to-speech" style="margin-right: 15px; color: #0078d7; text-decoration: none;">SRT to Speech</a>
             <a href="tts-timeline" style="margin-right: 15px; color: #0078d7; text-decoration: none;">TTS 时间轴</a>
