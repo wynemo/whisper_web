@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi_toolbox import run_server, NextJSRouteMiddleware, StaticFilesCache
 from fastapi.middleware.cors import CORSMiddleware
 
+from auth import AuthGuardMiddleware
 from db import create_db_and_tables
 from routers import auth, files, whisper, tts
 
@@ -21,6 +22,9 @@ app.add_middleware(
     static_dir=PAGES_DIR,
     skip_prefixes=["/api", "/auth", "/ws", "/upload", "/files", "/docs", "/redoc", "/openapi.json"],
 )
+
+# 页面认证守卫（在 NextJSRouteMiddleware 之外，拦截未登录的页面请求）
+app.add_middleware(AuthGuardMiddleware)
 
 # 可选：允许跨域
 app.add_middleware(

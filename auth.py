@@ -6,6 +6,8 @@ from typing import Optional
 from fastapi import Depends, HTTPException, Request, status
 from jose import JWTError, jwt
 from sqlmodel import Session, select
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import RedirectResponse
 
 from config import settings
 from db import get_session
@@ -13,6 +15,45 @@ from models import User
 
 ALGORITHM = "HS256"
 COOKIE_NAME = "access_token"
+
+
+class AuthGuardMiddleware(BaseHTTPMiddleware):
+    """页面认证守卫：未登录用户访问受保护页面时 302 重定向到 /login"""
+
+    PUBLIC_PATHS = {"/login", "/login/"}
+    SKIP_PREFIXES = (
+        "/auth/", "/api/", "/ws", "/upload/", "/files/",
+        "/docs", "/redoc", "/openapi.json",
+    )
+
+    async def dispatch(self, request, call_next):
+        path = request.url.path
+
+        # 公开路径放行
+        if path in self.PUBLIC_PATHS:
+            return await call_next(request)
+
+        # API / WebSocket 等路径放行（由端点自行认证）
+        for prefix in self.SKIP_PREFIXES:
+            if path.startswith(prefix):
+                return await call_next(request)
+
+        # 非 GET 请求放行（POST 等由端点自行返回 401）
+        if request.method != "GET":
+            return await call_next(request)
+
+        # 校验 JWT cookie
+        token = request.cookies.get(COOKIE_NAME)
+        if token:
+            try:
+                payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
+                if payload.get("sub"):
+                    return await call_next(request)
+            except JWTError:
+                pass
+
+        # 未认证，重定向到登录页
+        return RedirectResponse(url="/login", status_code=302)
 
 
 def generate_salt() -> str:
