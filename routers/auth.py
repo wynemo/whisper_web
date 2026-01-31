@@ -1,14 +1,11 @@
 from fastapi import APIRouter, Depends, Form, HTTPException
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from auth import (
     COOKIE_NAME,
     create_access_token,
-    generate_salt,
     get_current_user,
-    hash_password,
     verify_password,
 )
 from config import settings
@@ -16,34 +13,6 @@ from db import get_session
 from models import User
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-
-
-class RegisterRequest(BaseModel):
-    username: str
-    password: str
-
-
-@router.post("/register")
-async def register(request: RegisterRequest, session: Session = Depends(get_session)):
-    """用户注册"""
-    existing = session.exec(
-        select(User).where(User.username == request.username)
-    ).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="用户名已存在")
-
-    salt = generate_salt()
-    hashed = hash_password(request.password, salt)
-    user = User(
-        username=request.username,
-        hashed_password=hashed,
-        salt=salt,
-    )
-    session.add(user)
-    session.commit()
-    session.refresh(user)
-
-    return {"id": user.id, "username": user.username}
 
 
 @router.post("/login")

@@ -33,36 +33,8 @@
                 border-radius: 8px;
                 overflow: hidden;
             }
-            .tabs {
-                display: flex;
-                border-bottom: 1px solid #ddd;
-            }
-            .tab {
-                flex: 1;
-                padding: 14px;
-                text-align: center;
-                cursor: pointer;
-                background: #f8f9fa;
-                border: none;
-                font-size: 15px;
-                color: #555;
-                transition: background 0.2s;
-            }
-            .tab:hover {
-                background: #e9ecef;
-            }
-            .tab.active {
-                background: #fff;
-                color: #0078d7;
-                font-weight: bold;
-                border-bottom: 2px solid #0078d7;
-            }
             .form-panel {
-                display: none;
                 padding: 24px;
-            }
-            .form-panel.active {
-                display: block;
             }
             .form-group {
                 margin-bottom: 16px;
@@ -139,10 +111,6 @@
                 .form-panel {
                     padding: 16px;
                 }
-                .tab {
-                    padding: 12px;
-                    font-size: 14px;
-                }
                 .form-group input {
                     padding: 12px 10px;
                     font-size: 16px; /* prevents iOS zoom on focus */
@@ -162,12 +130,6 @@
         </nav>
 
         <div class="login-container">
-            <div class="tabs">
-                <button class="tab active" id="loginTab">登录</button>
-                <button class="tab" id="registerTab">注册</button>
-            </div>
-
-            <!-- 登录表单 -->
             <div class="form-panel active" id="loginPanel">
                 <div class="message" id="loginMsg"></div>
                 <form id="loginForm">
@@ -182,52 +144,12 @@
                     <button type="submit" class="submit-btn" id="loginBtn">登录</button>
                 </form>
             </div>
-
-            <!-- 注册表单 -->
-            <div class="form-panel" id="registerPanel">
-                <div class="message" id="registerMsg"></div>
-                <form id="registerForm">
-                    <div class="form-group">
-                        <label for="regUsername">用户名</label>
-                        <input type="text" id="regUsername" required autocomplete="username" />
-                    </div>
-                    <div class="form-group">
-                        <label for="regPassword">密码</label>
-                        <input type="password" id="regPassword" required autocomplete="new-password" />
-                    </div>
-                    <button type="submit" class="submit-btn" id="registerBtn">注册</button>
-                </form>
-            </div>
         </div>
 
         <script>
             const apiBaseUrl = window.location.origin;
-
-            const loginTab = document.getElementById('loginTab');
-            const registerTab = document.getElementById('registerTab');
-            const loginPanel = document.getElementById('loginPanel');
-            const registerPanel = document.getElementById('registerPanel');
             const loginForm = document.getElementById('loginForm');
-            const registerForm = document.getElementById('registerForm');
             const loginMsg = document.getElementById('loginMsg');
-            const registerMsg = document.getElementById('registerMsg');
-
-            function switchTab(tab) {
-                if (tab === 'login') {
-                    loginTab.classList.add('active');
-                    registerTab.classList.remove('active');
-                    loginPanel.classList.add('active');
-                    registerPanel.classList.remove('active');
-                } else {
-                    registerTab.classList.add('active');
-                    loginTab.classList.remove('active');
-                    registerPanel.classList.add('active');
-                    loginPanel.classList.remove('active');
-                }
-            }
-
-            loginTab.addEventListener('click', () => switchTab('login'));
-            registerTab.addEventListener('click', () => switchTab('register'));
 
             function showMsg(el, type, text) {
                 el.className = 'message ' + type;
@@ -238,7 +160,6 @@
                 el.className = 'message';
             }
 
-            // 登录
             loginForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 hideMsg(loginMsg);
@@ -267,7 +188,6 @@
                     const data = await response.json();
 
                     if (response.ok) {
-                        // 存储 token 到 sessionStorage 供 WebSocket 使用
                         if (data.token) {
                             sessionStorage.setItem('auth_token', data.token);
                         }
@@ -282,48 +202,6 @@
                     showMsg(loginMsg, 'error', '请求失败: ' + error.message);
                 } finally {
                     loginBtn.disabled = false;
-                }
-            });
-
-            // 注册
-            registerForm.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                hideMsg(registerMsg);
-                const username = document.getElementById('regUsername').value.trim();
-                const password = document.getElementById('regPassword').value;
-
-                if (!username || !password) {
-                    showMsg(registerMsg, 'error', '请输入用户名和密码');
-                    return;
-                }
-
-                const registerBtn = document.getElementById('registerBtn');
-                registerBtn.disabled = true;
-
-                try {
-                    const response = await fetch(`${apiBaseUrl}/auth/register`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ username, password }),
-                    });
-
-                    const data = await response.json();
-
-                    if (response.ok) {
-                        showMsg(registerMsg, 'success', '注册成功，请切换到登录');
-                        // 自动切换到登录 tab
-                        setTimeout(() => {
-                            switchTab('login');
-                            document.getElementById('loginUsername').value = username;
-                            document.getElementById('loginPassword').focus();
-                        }, 1000);
-                    } else {
-                        showMsg(registerMsg, 'error', data.detail || '注册失败');
-                    }
-                } catch (error) {
-                    showMsg(registerMsg, 'error', '请求失败: ' + error.message);
-                } finally {
-                    registerBtn.disabled = false;
                 }
             });
         </script>
