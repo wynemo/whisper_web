@@ -6,10 +6,6 @@ on:
       - main
   workflow_dispatch:
 
-env:
-  SERVER_HOST: 115.190.2.58
-  SERVER_USER: root
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -17,8 +13,8 @@ jobs:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
         with:
-          host: ${{ env.SERVER_HOST }}
-          username: ${{ env.SERVER_USER }}
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd /root/whisper_web
