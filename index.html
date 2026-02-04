@@ -146,7 +146,11 @@
             <h3>字幕纠错 (LLM)</h3>
             <p style="color: #666; font-size: 13px; margin-bottom: 15px;">输入参考文本，使用大模型对比纠正 ASR 生成的字幕。支持 OpenAI 兼容的 API。</p>
 
-            <div class="llm-config">
+            <div id="llmServerConfigHint" style="display: none; color: #28a745; font-size: 13px; margin-bottom: 10px;">
+                ✓ 服务器已配置 LLM，无需填写以下信息。
+                <a href="#" id="showLlmConfigToggle" style="color: #007bff; margin-left: 5px;">自定义配置</a>
+            </div>
+            <div class="llm-config" id="llmConfigFields">
                 <div>
                     <label for="llmApiUrl">API 地址</label>
                     <input type="text" id="llmApiUrl" placeholder="https://api.openai.com" />
@@ -469,6 +473,30 @@
             llmApiUrl.addEventListener("change", saveLlmConfig);
             llmApiKey.addEventListener("change", saveLlmConfig);
             llmModel.addEventListener("change", saveLlmConfig);
+
+            // 检查服务器是否已配置 LLM
+            let serverHasLlmConfig = false;
+            (async function checkLlmConfigStatus() {
+                try {
+                    const resp = await fetch(`${apiBaseUrl}/llm-config-status`);
+                    if (resp.ok) {
+                        const status = await resp.json();
+                        if (status.has_api_base_url && status.has_api_key && status.has_model) {
+                            serverHasLlmConfig = true;
+                            document.getElementById("llmServerConfigHint").style.display = "block";
+                            document.getElementById("llmConfigFields").style.display = "none";
+                        }
+                    }
+                } catch (_) {}
+            })();
+
+            document.getElementById("showLlmConfigToggle").addEventListener("click", (e) => {
+                e.preventDefault();
+                const fields = document.getElementById("llmConfigFields");
+                const isHidden = fields.style.display === "none";
+                fields.style.display = isHidden ? "" : "none";
+                e.target.textContent = isHidden ? "隐藏配置" : "自定义配置";
+            });
 
             function setCorrectionStatus(type, message) {
                 correctionStatus.className = "correction-status " + type;

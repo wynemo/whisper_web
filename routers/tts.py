@@ -272,6 +272,16 @@ async def generate_srt(request: GenerateSrtRequest, _user: User = Depends(get_cu
     )
 
 
+@router.get("/llm-config-status")
+async def llm_config_status(_user: User = Depends(get_current_user)):
+    """返回服务器是否已配置 LLM，不暴露实际值"""
+    return {
+        "has_api_base_url": bool(settings.LLM_API_BASE_URL),
+        "has_api_key": bool(settings.LLM_API_KEY),
+        "has_model": bool(settings.LLM_MODEL),
+    }
+
+
 @router.post("/correct-subtitles/")
 async def correct_subtitles(request: CorrectSubtitlesRequest, _user: User = Depends(get_current_user)):
     """使用 LLM 纠正 ASR 生成的字幕"""
