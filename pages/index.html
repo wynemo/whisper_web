@@ -527,6 +527,7 @@
 
             // 检查服务器是否已配置 LLM
             let serverHasLlmConfig = false;
+            let useCustomConfig = false;
             (async function checkLlmConfigStatus() {
                 try {
                     const resp = await fetch(`${apiBaseUrl}/llm-config-status`);
@@ -546,6 +547,7 @@
                 const fields = document.getElementById("llmConfigFields");
                 const isHidden = fields.style.display === "none";
                 fields.style.display = isHidden ? "" : "none";
+                useCustomConfig = isHidden;
                 e.target.textContent = isHidden ? "隐藏配置" : "自定义配置";
             });
 
@@ -576,15 +578,16 @@
                 correctedPreview.style.display = "none";
 
                 try {
+                    const sendCustom = !serverHasLlmConfig || useCustomConfig;
                     const response = await fetch(`${apiBaseUrl}/correct-subtitles/`, {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
                             srt_content: srtContent,
                             reference_text: refText,
-                            api_base_url: llmApiUrl.value,
-                            api_key: llmApiKey.value,
-                            model: llmModel.value,
+                            api_base_url: sendCustom ? llmApiUrl.value : "",
+                            api_key: sendCustom ? llmApiKey.value : "",
+                            model: sendCustom ? llmModel.value : "",
                         }),
                     });
 
