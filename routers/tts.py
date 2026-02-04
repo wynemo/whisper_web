@@ -289,7 +289,8 @@ async def correct_subtitles(request: CorrectSubtitlesRequest, _user: User = Depe
         "2. 只修正文字内容，不要改动时间轴\n"
         "3. 根据参考文本修正错别字、漏字、多字等识别错误\n"
         "4. 如果某段字幕在参考文本中找不到对应内容，保持原样\n"
-        "5. 只输出纠正后的完整 SRT 内容，不要输出任何解释说明"
+        "5. 在不改变原有意思的情况下，去掉口水话，尽量简短\n"
+        "6. 只输出纠正后的完整 SRT 内容，不要输出任何解释说明"
     )
 
     user_prompt = (
