@@ -509,22 +509,6 @@
 
             let correctedSrtContent = "";
 
-            // 从 localStorage 恢复 LLM 配置
-            llmApiUrl.value = localStorage.getItem("llmApiUrl") || "";
-            llmApiKey.value = localStorage.getItem("llmApiKey") || "";
-            llmModel.value = localStorage.getItem("llmModel") || "";
-
-            // 保存 LLM 配置到 localStorage
-            function saveLlmConfig() {
-                localStorage.setItem("llmApiUrl", llmApiUrl.value);
-                localStorage.setItem("llmApiKey", llmApiKey.value);
-                localStorage.setItem("llmModel", llmModel.value);
-            }
-
-            llmApiUrl.addEventListener("change", saveLlmConfig);
-            llmApiKey.addEventListener("change", saveLlmConfig);
-            llmModel.addEventListener("change", saveLlmConfig);
-
             // 检查服务器是否已配置 LLM
             let serverHasLlmConfig = false;
             let useCustomConfig = false;
@@ -547,7 +531,9 @@
                 const fields = document.getElementById("llmConfigFields");
                 const isHidden = fields.style.display === "none";
                 fields.style.display = isHidden ? "" : "none";
-                useCustomConfig = isHidden;
+                if (isHidden) {
+                    useCustomConfig = true;
+                }
                 e.target.textContent = isHidden ? "隐藏配置" : "自定义配置";
             });
 
@@ -569,8 +555,6 @@
                     return;
                 }
 
-                saveLlmConfig();
-
                 correctBtn.disabled = true;
                 setCorrectionStatus("loading", "正在调用大模型纠错，请稍候...");
                 applyCorrectionBtn.style.display = "none";
@@ -579,16 +563,19 @@
 
                 try {
                     const sendCustom = !serverHasLlmConfig || useCustomConfig;
+                    const payload = {
+                        srt_content: srtContent,
+                        reference_text: refText,
+                    };
+                    if (sendCustom) {
+                        payload.api_base_url = llmApiUrl.value;
+                        payload.api_key = llmApiKey.value;
+                        payload.model = llmModel.value;
+                    }
                     const response = await fetch(`${apiBaseUrl}/correct-subtitles/`, {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                            srt_content: srtContent,
-                            reference_text: refText,
-                            api_base_url: sendCustom ? llmApiUrl.value : "",
-                            api_key: sendCustom ? llmApiKey.value : "",
-                            model: sendCustom ? llmModel.value : "",
-                        }),
+                        body: JSON.stringify(payload),
                     });
 
                     const data = await response.json();
